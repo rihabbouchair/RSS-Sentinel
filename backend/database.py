@@ -47,6 +47,7 @@ def init_db():
             url TEXT UNIQUE,
             summary TEXT,
             sentiment TEXT,
+            confidence_score REAL,
             topic TEXT,
             category TEXT,
             published_at TEXT,

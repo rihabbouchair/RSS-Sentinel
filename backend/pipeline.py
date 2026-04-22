@@ -33,7 +33,8 @@ def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
         f"Text: {first_three_sentences}\n\n"
         f"Return JSON with exactly two keys:\n"
         f"1. 'sentiment': must be exactly 'Positive', 'Negative', or 'Neutral'\n"
-        f"2. 'topic': a specific 2-4 word label describing what this article is about.\n"
+        f"2. 'confidence_score': a float between 0 and 1 representing your certainty.\n"
+        f"3. 'topic': a specific 2-4 word label describing what this article is about.\n"
         f"   - Be specific: 'Algerian Football', 'Gaza War', 'Stock Market Crash', 'Cancer Research', 'French Elections'\n"
         f"   - If article is in Arabic or French, still write the topic label in English\n"
         f"   - Never use vague labels like 'News', 'General', 'Other', 'World News'\n"
@@ -62,7 +63,7 @@ def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
         raise ValueError("No JSON found")
     except Exception as e:
         print(f"Ollama analysis failed: {e}")
-        return {"sentiment": "Neutral", "topic": "General News"}
+        return {"sentiment": "Neutral", "confidence_score": 0.5, "topic": "General News"}
 
 def map_to_category(llm_topic: str, user_topics: list) -> str:
     """Map LLM free topic to user's selected broad category"""
@@ -161,6 +162,7 @@ def process_feed(feed: dict, user_topics: list) -> int:
                 analysis = analyze_with_ollama(title, first_three)
 
                 specific_topic = analysis.get("topic", "General News")
+                confidence = analysis.get("confidence_score", 0.0)
                 category = map_to_category(specific_topic, user_topics)
 
                 conn_insert = get_conn()
@@ -172,6 +174,7 @@ def process_feed(feed: dict, user_topics: list) -> int:
                     """, (
                         feed_id, title, url, first_three,
                         analysis.get("sentiment", "Neutral"),
+                        confidence,
                         specific_topic,
                         category,
                         published_at
@@ -231,7 +234,7 @@ def run_pipeline_for_user(user_id: int):
     ).fetchone()
     if user and user["wants_email_digest"] == 1 and user["email"]:
         articles_for_digest = [dict(r) for r in conn_email.execute("""
-            SELECT title, url, summary, sentiment, topic, category, published_at
+            SELECT title, url, summary, sentiment, confidence_score,topic, category, published_at
             FROM articles
             WHERE feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
             ORDER BY fetched_at DESC LIMIT 20

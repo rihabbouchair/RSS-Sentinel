@@ -81,6 +81,19 @@ export default function ArticleCard({ article }) {
             <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: cfg.color }}></span>
             {sentiment}
           </span>
+          {/* confidence score */}
+          {article.confidence_score && (
+            <span style={{
+              fontSize: '9px',
+              color: 'var(--text-muted)',
+              fontFamily: 'DM Mono, monospace',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '3px'
+            }}>
+              🎯 {Math.round(article.confidence_score * 100)}% confidence
+            </span>
+          )}
         </div>
 
         {/* Source */}

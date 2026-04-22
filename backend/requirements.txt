@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+feedparser
+beautifulsoup4
+apscheduler
+python-dotenv
+requests
+bcrypt
+python-jose[cryptography]
+python-multipart

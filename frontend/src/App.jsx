@@ -1,0 +1,50 @@
+import { useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import ProtectedRoute from './components/ProtectedRoute';
+import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
+import Dashboard from './pages/Dashboard';
+import Subscribe from './pages/Subscribe';
+import Login from './pages/Login';
+import Register from './pages/Register';
+
+function AppContent() {
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const { token } = useAuth();
+
+  const AppLayout = ({ children }) => (
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+      <Sidebar selectedTopic={selectedTopic} onTopicSelect={setSelectedTopic} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Navbar />
+        {children}
+      </div>
+    </div>
+  );
+
+  return (
+    <Routes>
+      <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/register" element={token ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/" element={
+        <ProtectedRoute>
+          <AppLayout><Dashboard selectedTopic={selectedTopic} /></AppLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/settings" element={
+        <ProtectedRoute>
+          <AppLayout><Subscribe /></AppLayout>
+        </ProtectedRoute>
+      } />
+    </Routes>
+  );
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider><AppContent /></AuthProvider>
+    </BrowserRouter>
+  );
+}

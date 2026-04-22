@@ -2,7 +2,6 @@ const sentimentConfig = {
   Positive: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)', bar: '#4ade80' },
   Negative: { color: '#fb7185', bg: 'rgba(251,113,133,0.10)', border: 'rgba(251,113,133,0.25)', bar: '#fb7185' },
   Neutral: { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', bar: '#64748b' },
-  Neutral: { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', bar: '#64748b' },
 };
 
 const topicColors = {
@@ -152,51 +151,8 @@ export default function ArticleCard({ article }) {
             </div>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <span
-              style={{
-                fontSize: '10px',
-                fontWeight: '500',
-                fontFamily: 'DM Mono, monospace',
-                padding: '3px 10px',
-                borderRadius: '20px',
-                background: cfg.bg,
-                color: cfg.color,
-                border: `0.5px solid ${cfg.border}`,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span
-                style={{
-                  width: '5px',
-                  height: '5px',
-                  borderRadius: '50%',
-                  background: cfg.color,
-                }}
-              />
-              {sentiment}
-            </span>
 
-            {hasConfidence && (
-              <span
-                style={{
-                  fontSize: '10px',
-                  color: 'var(--text-muted)',
-                  fontFamily: 'DM Mono, monospace',
-                  padding: '3px 8px',
-                  borderRadius: '20px',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '0.5px solid var(--border)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {confidencePercent}% confidence
-              </span>
-            )}
-          </div>
+
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>

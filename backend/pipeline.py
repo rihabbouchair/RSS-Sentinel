@@ -31,13 +31,15 @@ def extract_first_three_sentences(text: str) -> str:
 
 def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
     prompt = (
-        f"You are a news classifier. Analyze this article and respond ONLY with a valid JSON object.\n\n"
+        f"Analyze the sentiment of this news article for a user's feed.\n"
         f"Title: {title}\n"
         f"Text: {first_three_sentences}\n\n"
-        f"Return JSON with exactly three keys:\n"
-        f"1. 'sentiment': must be exactly 'Positive', 'Negative', or 'Neutral'\n"
-        f"2. 'confidence_score': a float between 0 and 1 representing your certainty\n"
-        f"3. 'topic': a specific 2-4 word label describing what this article is about\n"
+        f"Guidelines:\n"
+        f"- 'Positive': News about progress, success, new launches, or positive growth.\n"
+        f"- 'Negative': News about conflicts, failures, drops in market, or problems.\n"
+        f"- 'Neutral': Purely factual reporting with no clear positive or negative impact.\n\n"
+        f"Respond ONLY with a valid JSON object:\n"
+        f"{{\"sentiment\": \"Positive\"/\"Negative\"/\"Neutral\", \"confidence_score\": float, \"topic\": \"string\"}}"
     )
     try:
         response = requests.post(

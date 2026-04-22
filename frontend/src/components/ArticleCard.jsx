@@ -104,7 +104,6 @@ export default function ArticleCard({ article }) {
             }}>
 
               <span style={{ fontSize: '11px', verticalAlign: 'middle' }}>🛡️</span>
-
               <span style={{ fontWeight: '500' }}>
                 {Math.round(article.confidence_score * 100)}%
               </span>

@@ -91,7 +91,7 @@ export default function ArticleCard({ article }) {
               alignItems: 'center',
               gap: '3px'
             }}>
-              🎯 {Math.round(article.confidence_score * 100)}% confidence
+              {Math.round(article.confidence_score * 100)}% confidence
             </span>
           )}
         </div>

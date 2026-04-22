@@ -1,7 +1,7 @@
 const sentimentConfig = {
   Positive: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)', bar: '#4ade80' },
   Negative: { color: '#fb7185', bg: 'rgba(251,113,133,0.10)', border: 'rgba(251,113,133,0.25)', bar: '#fb7185' },
-  Neutral:  { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', bar: '#64748b' },
+  Neutral: { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', bar: '#64748b' },
 };
 
 const topicColors = {
@@ -16,7 +16,13 @@ function formatDate(dateString) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return dateString; }
 }
-
+const getConfidenceStyles = (score) => {
+  if (!score) return { color: '#94a3b8', label: 'Uncertain' };
+  if (score >= 0.9) return { color: '#22c55e', label: 'High Certainty' };
+  if (score >= 0.7) return { color: '#a855f7', label: 'Reliable' };
+  if (score >= 0.5) return { color: '#eab308', label: 'Average' };
+  return { color: '#ef4444', label: 'Low Certainty' };
+};
 export default function ArticleCard({ article }) {
   const sentiment = article.sentiment || 'Neutral';
   const cfg = sentimentConfig[sentiment] || sentimentConfig.Neutral;
@@ -83,16 +89,30 @@ export default function ArticleCard({ article }) {
           </span>
           {/* confidence score */}
           {article.confidence_score && (
-            <span style={{
-              fontSize: '9px',
-              color: 'var(--text-muted)',
-              fontFamily: 'DM Mono, monospace',
+            <div style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '3px'
+              gap: '5px',
+              fontSize: '9px',
+              fontFamily: 'DM Mono, monospace',
+              color: getConfidenceStyles(article.confidence_score).color,
+              background: `${getConfidenceStyles(article.confidence_score).color}10`,
+              padding: '2px 8px',
+              borderRadius: '4px',
+              border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30`,
+              lineHeight: '1.2'
             }}>
-              {Math.round(article.confidence_score * 100)}% confidence
-            </span>
+
+              <span style={{ fontSize: '11px', verticalAlign: 'middle' }}>🛡️</span>
+
+              <span style={{ fontWeight: '500' }}>
+                {Math.round(article.confidence_score * 100)}%
+              </span>
+
+              <span style={{ opacity: 0.8, fontSize: '8px', marginLeft: '2px' }}>
+                ({getConfidenceStyles(article.confidence_score).label})
+              </span>
+            </div>
           )}
         </div>
 

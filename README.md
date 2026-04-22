@@ -33,3 +33,23 @@
 Ensure you have **Ollama** installed and running, then pull the model:
 ```bash
 ollama run gemma3:4b
+```
+2. Backend Setup
+```bash
+cd backend
+pip install -r requirements.txt
+uvicorn main:app --reload
+```
+3. Frontend Setup
+```bash
+cd frontend
+npm install
+npm run dev
+```
+4. Data Pipeline
+To manually trigger the news collection and analysis pipeline:
+
+```bash
+cd backend
+python -c "from pipeline import run_pipeline; run_pipeline()"
+```

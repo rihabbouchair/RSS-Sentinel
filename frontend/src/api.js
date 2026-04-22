@@ -4,8 +4,23 @@ function getAuthHeaders() {
   const token = localStorage.getItem('token');
   return {
     'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` })
+    ...(token && { Authorization: `Bearer ${token}` }),
   };
+}
+
+async function parseJson(response, fallbackMessage) {
+  let data = null;
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(data?.detail || data?.message || fallbackMessage);
+  }
+
+  return data;
 }
 
 export async function login(username, password) {
@@ -14,11 +29,7 @@ export async function login(username, password) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
   });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Login failed');
-  }
-  return response.json();
+  return parseJson(response, 'Login failed');
 }
 
 export async function register({ username, password, email, topics, wants_email_digest }) {
@@ -27,19 +38,14 @@ export async function register({ username, password, email, topics, wants_email_
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password, email, topics, wants_email_digest }),
   });
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.detail || 'Registration failed');
-  }
-  return response.json();
+  return parseJson(response, 'Registration failed');
 }
 
 export async function getCurrentUser() {
   const response = await fetch(`${API_BASE}/auth/me`, {
     headers: getAuthHeaders(),
   });
-  if (!response.ok) throw new Error('Failed to fetch user');
-  return response.json();
+  return parseJson(response, 'Failed to fetch user');
 }
 
 export async function getArticles({ category, sentiment, limit = 20 } = {}) {
@@ -47,25 +53,25 @@ export async function getArticles({ category, sentiment, limit = 20 } = {}) {
   if (category) params.append('category', category);
   if (sentiment) params.append('sentiment', sentiment);
   params.append('limit', limit);
-  const res = await fetch(`/api/articles?${params}`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Failed to fetch articles');
-  return res.json();
+
+  const response = await fetch(`${API_BASE}/articles?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to fetch articles');
 }
 
 export async function getTopics() {
   const response = await fetch(`${API_BASE}/articles/topics`, {
     headers: getAuthHeaders(),
   });
-  if (!response.ok) throw new Error('Failed to fetch topics');
-  return response.json();
+  return parseJson(response, 'Failed to fetch topics');
 }
 
 export async function getFeeds() {
   const response = await fetch(`${API_BASE}/feeds`, {
     headers: getAuthHeaders(),
   });
-  if (!response.ok) throw new Error('Failed to fetch feeds');
-  return response.json();
+  return parseJson(response, 'Failed to fetch feeds');
 }
 
 export async function updatePreferences({ topics, email, wants_email_digest }) {
@@ -74,6 +80,22 @@ export async function updatePreferences({ topics, email, wants_email_digest }) {
     headers: getAuthHeaders(),
     body: JSON.stringify({ topics, email, wants_email_digest }),
   });
-  if (!response.ok) throw new Error('Failed to update preferences');
-  return response.json();
+  return parseJson(response, 'Failed to update preferences');
+}
+
+export async function requestEmailVerification() {
+  const response = await fetch(`${API_BASE}/users/email/request-verification`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to send verification code');
+}
+
+export async function verifyEmailCode(code) {
+  const response = await fetch(`${API_BASE}/users/email/verify`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ code }),
+  });
+  return parseJson(response, 'Failed to verify email');
 }

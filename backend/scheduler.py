@@ -1,10 +1,10 @@
 from apscheduler.schedulers.background import BackgroundScheduler
-from pipeline import run_pipeline
+from pipeline import run_pipeline, send_daily_digests
 
 scheduler = BackgroundScheduler()
 
+
 def start_scheduler():
-    """Start the background scheduler to run pipeline every 6 hours"""
     scheduler.add_job(
         run_pipeline,
         'interval',
@@ -12,10 +12,23 @@ def start_scheduler():
         id='pipeline_job',
         replace_existing=True
     )
+
+    scheduler.add_job(
+        send_daily_digests,
+        'cron',
+        hour=8,
+        minute=0,
+        id='daily_digest_job',
+        replace_existing=True
+    )
+
     scheduler.start()
-    print("Scheduler started - pipeline will run every 6 hours")
+    print("Scheduler started")
+    print("- Feed pipeline runs every 6 hours")
+    print("- Daily digest job runs every day at 08:00 server time")
+
 
 def stop_scheduler():
-    """Stop the background scheduler"""
-    scheduler.shutdown()
-    print("Scheduler stopped")
+    if scheduler.running:
+        scheduler.shutdown()
+        print("Scheduler stopped")

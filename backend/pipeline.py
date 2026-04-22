@@ -1,7 +1,7 @@
 import feedparser
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from bs4 import BeautifulSoup
 from database import get_conn
 from email_service import send_digest
@@ -14,33 +14,30 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 ARTICLES_PER_FEED = 5
 
+
 def clean_html(html_text: str) -> str:
     if not html_text:
         return ""
     soup = BeautifulSoup(html_text, "html.parser")
     return soup.get_text(separator=" ", strip=True)
 
+
 def extract_first_three_sentences(text: str) -> str:
     if not text:
         return ""
     sentences = [s.strip() for s in text.split('.') if s.strip()]
-    return '. '.join(sentences[:3]) + '.'
+    return '. '.join(sentences[:3]) + '.' if sentences else ""
+
 
 def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
     prompt = (
         f"You are a news classifier. Analyze this article and respond ONLY with a valid JSON object.\n\n"
         f"Title: {title}\n"
         f"Text: {first_three_sentences}\n\n"
-        f"Return JSON with exactly two keys:\n"
+        f"Return JSON with exactly three keys:\n"
         f"1. 'sentiment': must be exactly 'Positive', 'Negative', or 'Neutral'\n"
-        f"2. 'confidence_score': a float between 0 and 1 representing your certainty.\n"
-        f"3. 'topic': a specific 2-4 word label describing what this article is about.\n"
-        f"   - Be specific: 'Algerian Football', 'Gaza War', 'Stock Market Crash', 'Cancer Research', 'French Elections'\n"
-        f"   - If article is in Arabic or French, still write the topic label in English\n"
-        f"   - Never use vague labels like 'News', 'General', 'Other', 'World News'\n"
-        f"   - For sports: always mention the specific sport or team, e.g. 'NBA Basketball', 'Algerian Football'\n"
-        f"   - For politics: mention the country or region, e.g. 'US Politics', 'Middle East Conflict'\n\n"
-        f"Example: {{\"sentiment\": \"Positive\", \"topic\": \"Algerian Football\"}}"
+        f"2. 'confidence_score': a float between 0 and 1 representing your certainty\n"
+        f"3. 'topic': a specific 2-4 word label describing what this article is about\n"
     )
     try:
         response = requests.post(
@@ -65,35 +62,33 @@ def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
         print(f"Ollama analysis failed: {e}")
         return {"sentiment": "Neutral", "confidence_score": 0.5, "topic": "General News"}
 
+
 def map_to_category(llm_topic: str, user_topics: list) -> str:
-    """Map LLM free topic to user's selected broad category"""
     t = llm_topic.lower().strip()
 
     topic_keywords = {
-        "AI":       ["ai", "artificial intelligence", "machine learning", "neural", "llm", "chatgpt", "openai", "robot", "automation", "deep learning", "generative ai"],
-        "Tech":     ["tech", "software", "hardware", "cyber", "digital", "computer", "internet", "app", "semiconductor", "smartphone", "gadget"],
+        "AI": ["ai", "artificial intelligence", "machine learning", "neural", "llm", "chatgpt", "openai", "robot", "automation", "deep learning", "generative ai"],
+        "Tech": ["tech", "software", "hardware", "cyber", "digital", "computer", "internet", "app", "semiconductor", "smartphone", "gadget"],
         "Politics": ["politic", "government", "election", "president", "minister", "law", "policy", "vote", "diplomacy", "war", "conflict", "military", "senate", "congress", "parliament"],
-        "Sport":    ["sport", "football", "basketball", "tennis", "soccer", "olympic", "athlete", "championship", "league", "match", "tournament", "player", "coach", "club", "team", "fifa", "uefa", "nba", "nfl", "formula", "racing", "algerian football", "كرة", "رياضة"],
-        "Economy":  ["economy", "economic", "market", "stock", "finance", "trade", "gdp", "inflation", "bank", "investment", "oil", "price", "budget", "currency", "business", "company", "earnings"],
-        "Science":  ["science", "research", "space", "nasa", "biology", "physics", "chemistry", "discovery", "experiment", "astronomy"],
-        "Health":   ["health", "disease", "hospital", "medicine", "treatment", "epidemic", "virus", "cancer", "vaccine", "medical", "doctor"],
-        "Culture":  ["culture", "art", "cinema", "music", "film", "religion", "social", "literature", "festival", "entertainment"],
+        "Sport": ["sport", "football", "basketball", "tennis", "soccer", "olympic", "athlete", "championship", "league", "match", "tournament", "player", "coach", "club", "team", "fifa", "uefa", "nba", "nfl", "formula", "racing"],
+        "Economy": ["economy", "economic", "market", "stock", "finance", "trade", "gdp", "inflation", "bank", "investment", "oil", "price", "budget", "currency", "business", "company", "earnings"],
+        "Science": ["science", "research", "space", "nasa", "biology", "physics", "chemistry", "discovery", "experiment", "astronomy"],
+        "Health": ["health", "disease", "hospital", "medicine", "treatment", "epidemic", "virus", "cancer", "vaccine", "medical", "doctor"],
+        "Culture": ["culture", "art", "cinema", "music", "film", "religion", "social", "literature", "festival", "entertainment"],
         "Environment": ["environment", "climate", "global warming", "pollution", "renewable", "energy", "ecology"],
     }
 
-    # Direct match first (e.g. LLM returns "Sport" exactly)
     for user_topic in user_topics:
         if t == user_topic.lower():
             return user_topic
 
-    # Keyword match
     for user_topic in user_topics:
         keywords = topic_keywords.get(user_topic, [user_topic.lower()])
         if any(kw in t for kw in keywords):
             return user_topic
 
-    # Default to first user topic
     return user_topics[0] if user_topics else "General"
+
 
 def cleanup_old_articles(user_id: int):
     conn = get_conn()
@@ -107,6 +102,7 @@ def cleanup_old_articles(user_id: int):
     conn.close()
     print(f"  Cleaned up {deleted} old articles for user {user_id}")
 
+
 def get_feed_article_count(feed_id: int) -> int:
     conn = get_conn()
     count = conn.execute(
@@ -114,6 +110,7 @@ def get_feed_article_count(feed_id: int) -> int:
     ).fetchone()[0]
     conn.close()
     return count
+
 
 def process_feed(feed: dict, user_topics: list) -> int:
     feed_id = feed["id"]
@@ -136,6 +133,7 @@ def process_feed(feed: dict, user_topics: list) -> int:
         for entry in entries:
             if added >= slots_available:
                 break
+
             try:
                 title = entry.get("title", "Untitled")
                 url = entry.get("link", "")
@@ -172,7 +170,10 @@ def process_feed(feed: dict, user_topics: list) -> int:
                         (feed_id, title, url, summary, sentiment, confidence_score, topic, category, published_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        feed_id, title, url, first_three,
+                        feed_id,
+                        title,
+                        url,
+                        first_three,
                         analysis.get("sentiment", "Neutral"),
                         confidence,
                         specific_topic,
@@ -181,35 +182,41 @@ def process_feed(feed: dict, user_topics: list) -> int:
                     ))
                     conn_insert.commit()
                     added += 1
-                    print(f"    ✓ Added [{category} > {specific_topic}]: {title[:40]}...")
+                    print(f"    Added [{category} > {specific_topic}]: {title[:40]}...")
                 finally:
                     conn_insert.close()
 
             except Exception as e:
-                print(f"    ✗ Failed article: {e}")
+                print(f"    Failed article: {e}")
                 continue
 
         conn_upd = get_conn()
         conn_upd.execute(
             "UPDATE feeds SET last_fetched_at = ? WHERE id = ?",
-            (datetime.now().isoformat(), feed_id)
+            (datetime.utcnow().isoformat(), feed_id)
         )
         conn_upd.commit()
         conn_upd.close()
 
     except Exception as e:
-        print(f"  ✗ Failed feed: {e}")
+        print(f"  Failed feed: {e}")
 
     return added
 
+
 def run_pipeline_for_user(user_id: int):
-    print(f"\n=== Pipeline started for user {user_id} at {datetime.now()} ===")
+    print(f"\n=== Pipeline started for user {user_id} at {datetime.utcnow()} UTC ===")
 
     conn = get_conn()
-    user_row = conn.execute("SELECT topics FROM users WHERE id = ?", (user_id,)).fetchone()
+    user_row = conn.execute(
+        "SELECT topics FROM users WHERE id = ?",
+        (user_id,)
+    ).fetchone()
     user_topics = json.loads(user_row["topics"]) if user_row else []
+
     feeds = [dict(f) for f in conn.execute(
-        "SELECT * FROM feeds WHERE user_id = ?", (user_id,)
+        "SELECT * FROM feeds WHERE user_id = ?",
+        (user_id,)
     ).fetchall()]
     conn.close()
 
@@ -228,29 +235,89 @@ def run_pipeline_for_user(user_id: int):
 
     print(f"\n=== Pipeline complete for user {user_id}: {articles_added} new articles ===")
 
-    conn_email = get_conn()
-    user = conn_email.execute(
-        "SELECT email, wants_email_digest FROM users WHERE id = ?", (user_id,)
-    ).fetchone()
-    if user and user["wants_email_digest"] == 1 and user["email"]:
-        articles_for_digest = [dict(r) for r in conn_email.execute("""
-            SELECT title, url, summary, sentiment, confidence_score,topic, category, published_at
-            FROM articles
-            WHERE feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
-            ORDER BY fetched_at DESC LIMIT 20
-        """, (user_id,)).fetchall()]
-        conn_email.close()
-        if articles_for_digest:
-            send_digest(user["email"], articles_for_digest)
-    else:
-        conn_email.close()
 
 def run_pipeline():
-    print(f"\n=== Global pipeline started at {datetime.now()} ===")
+    print(f"\n=== Global pipeline started at {datetime.utcnow()} UTC ===")
     conn = get_conn()
     users = [dict(u) for u in conn.execute("SELECT id FROM users").fetchall()]
     conn.close()
+
     print(f"Found {len(users)} users to process")
     for user in users:
         run_pipeline_for_user(user["id"])
-    print(f"=== Global pipeline complete at {datetime.now()} ===\n")
+
+    print(f"=== Global pipeline complete at {datetime.utcnow()} UTC ===\n")
+
+
+def send_daily_digest_for_user(user_id: int):
+    conn = get_conn()
+    user = conn.execute("""
+        SELECT id, email, wants_email_digest, email_verified, last_digest_sent_at
+        FROM users
+        WHERE id = ?
+    """, (user_id,)).fetchone()
+
+    if not user:
+        conn.close()
+        return
+
+    if not user["email"] or user["wants_email_digest"] != 1 or user["email_verified"] != 1:
+        conn.close()
+        return
+
+    today_utc = datetime.utcnow().date()
+    if user["last_digest_sent_at"]:
+        try:
+            last_sent_date = datetime.fromisoformat(user["last_digest_sent_at"]).date()
+            if last_sent_date == today_utc:
+                conn.close()
+                print(f"Digest already sent today for user {user_id}")
+                return
+        except Exception:
+            pass
+
+    since_24h = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+    articles_for_digest = [dict(r) for r in conn.execute("""
+        SELECT title, url, summary, sentiment, confidence_score, topic, category, published_at
+        FROM articles
+        WHERE feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
+          AND fetched_at >= ?
+        ORDER BY fetched_at DESC
+        LIMIT 20
+    """, (user_id, since_24h)).fetchall()]
+
+    if not articles_for_digest:
+        conn.close()
+        print(f"No fresh articles for user {user_id}, skipping digest")
+        return
+
+    sent = send_digest(user["email"], articles_for_digest)
+    if sent:
+        conn.execute("""
+            UPDATE users
+            SET last_digest_sent_at = ?
+            WHERE id = ?
+        """, (datetime.utcnow().isoformat(), user_id))
+        conn.commit()
+        print(f"Daily digest sent for user {user_id}")
+
+    conn.close()
+
+
+def send_daily_digests():
+    print(f"\n=== Daily digest job started at {datetime.utcnow()} UTC ===")
+    conn = get_conn()
+    users = [dict(u) for u in conn.execute("""
+        SELECT id
+        FROM users
+        WHERE wants_email_digest = 1
+          AND email_verified = 1
+          AND email IS NOT NULL
+    """).fetchall()]
+    conn.close()
+
+    print(f"Found {len(users)} users eligible for daily digest")
+    for user in users:
+        send_daily_digest_for_user(user["id"])
+
+    print(f"=== Daily digest job complete at {datetime.utcnow()} UTC ===\n")

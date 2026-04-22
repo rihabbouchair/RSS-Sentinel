@@ -169,8 +169,8 @@ def process_feed(feed: dict, user_topics: list) -> int:
                 try:
                     conn_insert.execute("""
                         INSERT OR IGNORE INTO articles
-                        (feed_id, title, url, summary, sentiment, topic, category, published_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        (feed_id, title, url, summary, sentiment, confidence_score, topic, category, published_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         feed_id, title, url, first_three,
                         analysis.get("sentiment", "Neutral"),

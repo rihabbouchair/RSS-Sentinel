@@ -22,6 +22,7 @@ class RegisterRequest(BaseModel):
     email: Optional[str] = None
     topics: List[str]
     wants_email_digest: bool = False
+    language_preferences: Optional[List[str]] = None
 
 
 class LoginRequest(BaseModel):
@@ -30,12 +31,27 @@ class LoginRequest(BaseModel):
 
 
 def serialize_user(user_row):
+    topics = json.loads(user_row["topics"]) if user_row["topics"] else []
+    
+    # Handle language_preferences safely - might be NULL in database
+    lang_prefs = None
+    try:
+        lang_prefs = user_row["language_preferences"]
+    except (KeyError, TypeError, IndexError):
+        lang_prefs = None
+    
+    try:
+        language_preferences = json.loads(lang_prefs) if lang_prefs else ["English"]
+    except (TypeError, ValueError):
+        language_preferences = ["English"]
+    
     return {
         "id": user_row["id"],
         "username": user_row["username"],
         "email": user_row["email"],
         "pending_email": user_row["pending_email"],
-        "topics": json.loads(user_row["topics"]),
+        "topics": topics,
+        "language_preferences": language_preferences,
         "wants_email_digest": bool(user_row["wants_email_digest"]),
         "email_verified": bool(user_row["email_verified"]),
     }
@@ -59,6 +75,8 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
 
         password_hash = hash_password(request.password)
         topics_json = json.dumps(request.topics)
+        language_preferences = request.language_preferences or ["English"]
+        language_preferences_json = json.dumps(language_preferences)
 
         email_verified = 0
         pending_email = None
@@ -80,18 +98,20 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
                 pending_email,
                 password_hash,
                 topics,
+                language_preferences,
                 wants_email_digest,
                 email_verified,
                 email_verification_code_hash,
                 email_verification_expires_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             request.username,
             None,
             pending_email,
             password_hash,
             topics_json,
+            language_preferences_json,
             1 if request.wants_email_digest else 0,
             email_verified,
             verification_code_hash,
@@ -101,17 +121,17 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
         user_id = cursor.lastrowid
 
         for topic in request.topics:
-            feed_urls = get_feed_urls(topic)
-            for feed_url in feed_urls:
+            feed_urls_with_langs = get_feed_urls(topic, language_preferences)
+            for feed_url, language in feed_urls_with_langs:
                 cursor.execute("""
-                    INSERT INTO feeds (user_id, url, topic)
-                    VALUES (?, ?, ?)
-                """, (user_id, feed_url, topic))
+                    INSERT INTO feeds (user_id, url, topic, language)
+                    VALUES (?, ?, ?, ?)
+                """, (user_id, feed_url, topic, language))
 
         conn.commit()
 
         cursor.execute("""
-            SELECT id, username, email, pending_email, topics, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified
             FROM users
             WHERE id = ?
         """, (user_id,))
@@ -138,13 +158,13 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
 
 
 @router.post("/auth/login")
-def login(request: LoginRequest):
+def login(request: LoginRequest, background_tasks: BackgroundTasks):
     conn = get_conn()
     cursor = conn.cursor()
 
     try:
         cursor.execute("""
-            SELECT id, username, email, pending_email, password_hash, topics, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, password_hash, topics, language_preferences, wants_email_digest, email_verified
             FROM users
             WHERE username = ?
         """, (request.username,))
@@ -158,6 +178,7 @@ def login(request: LoginRequest):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         token = create_access_token(user["id"])
+        background_tasks.add_task(run_pipeline_for_user, user["id"])
 
         return {
             "token": token,
@@ -177,7 +198,7 @@ def get_me(current_user: dict = Depends(get_current_user)):
 
     try:
         cursor.execute("""
-            SELECT id, username, email, pending_email, topics, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified
             FROM users
             WHERE id = ?
         """, (current_user["id"],))

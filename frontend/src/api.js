@@ -32,11 +32,11 @@ export async function login(username, password) {
   return parseJson(response, 'Login failed');
 }
 
-export async function register({ username, password, email, topics, wants_email_digest }) {
+export async function register({ username, password, email, topics, wants_email_digest, language_preferences }) {
   const response = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, email, topics, wants_email_digest }),
+    body: JSON.stringify({ username, password, email, topics, wants_email_digest, language_preferences }),
   });
   return parseJson(response, 'Registration failed');
 }
@@ -74,11 +74,11 @@ export async function getFeeds() {
   return parseJson(response, 'Failed to fetch feeds');
 }
 
-export async function updatePreferences({ topics, email, wants_email_digest }) {
+export async function updatePreferences({ topics, email, wants_email_digest, language_preferences }) {
   const response = await fetch(`${API_BASE}/users/preferences`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ topics, email, wants_email_digest }),
+    body: JSON.stringify({ topics, email, wants_email_digest, language_preferences }),
   });
   return parseJson(response, 'Failed to update preferences');
 }
@@ -98,4 +98,12 @@ export async function verifyEmailCode(code) {
     body: JSON.stringify({ code }),
   });
   return parseJson(response, 'Failed to verify email');
+}
+
+export async function refreshArticles() {
+  const response = await fetch(`${API_BASE}/articles/refresh`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to refresh articles');
 }

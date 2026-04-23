@@ -26,6 +26,7 @@ def init_db():
             pending_email TEXT,
             password_hash TEXT NOT NULL,
             topics TEXT DEFAULT '[]',
+            language_preferences TEXT DEFAULT '["English"]',
             wants_email_digest INTEGER DEFAULT 0,
             email_verified INTEGER DEFAULT 0,
             email_verification_code_hash TEXT,
@@ -41,10 +42,16 @@ def init_db():
             user_id INTEGER,
             url TEXT,
             topic TEXT,
+            language TEXT DEFAULT 'English',
             last_fetched_at TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
+    
+    try:
+        cursor.execute("ALTER TABLE feeds ADD COLUMN language TEXT DEFAULT 'English'")
+    except Exception:
+        pass
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS articles (
@@ -56,6 +63,7 @@ def init_db():
             sentiment TEXT,
             confidence_score REAL,
             topic TEXT,
+            language TEXT DEFAULT 'English',
             inference_log TEXT,
             published_at TEXT,
             fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -73,6 +81,16 @@ def init_db():
     except Exception:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN language TEXT DEFAULT 'English'")
+    except Exception:
+        pass
+
+
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN language_preferences TEXT DEFAULT '[\"English\"]'")
+    except Exception:
+        pass
 
     # Add missing columns for existing databases first
     columns_to_add = [

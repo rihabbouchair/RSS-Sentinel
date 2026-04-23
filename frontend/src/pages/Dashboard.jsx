@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getArticles } from '../api';
+import { getArticles, refreshArticles } from '../api';
 import ArticleCard from '../components/ArticleCard';
 import FilterBar from '../components/FilterBar';
 import DailySummary from '../components/DailySummary';
@@ -10,6 +10,7 @@ export default function Dashboard({ selectedTopic }) {
   const [selectedSentiment, setSelectedSentiment] = useState(null);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const articlesPerPage = 20;
 
@@ -46,6 +47,21 @@ export default function Dashboard({ selectedTopic }) {
     } finally {
       setLoading(false);
       setFetching(false);
+    }
+  }
+
+  async function handleRefreshPipeline() {
+    setRefreshing(true);
+    try {
+      await refreshArticles();
+      // Wait 2 seconds then reload articles
+      setTimeout(() => {
+        loadArticles();
+        setRefreshing(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to refresh pipeline:', error);
+      setRefreshing(false);
     }
   }
 
@@ -117,14 +133,36 @@ export default function Dashboard({ selectedTopic }) {
               </h1>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>
                 {articles.length} articles · {uniqueSources} sources
-                {fetching && <span style={{ color: '#a78bfa', marginLeft: '8px' }}>· refreshing...</span>}
+                {(fetching || refreshing) && <span style={{ color: '#a78bfa', marginLeft: '8px' }}>· refreshing...</span>}
               </div>
             </div>
-            {totalPages > 1 && (
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
-                Page {currentPage} / {totalPages}
-              </div>
-            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {totalPages > 1 && (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
+                  Page {currentPage} / {totalPages}
+                </div>
+              )}
+              <button
+                onClick={handleRefreshPipeline}
+                disabled={refreshing}
+                style={{
+                  padding: '6px 12px',
+                  background: refreshing ? '#6b7280' : '#8b5cf6',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: 'white',
+                  fontSize: '11px',
+                  fontWeight: '500',
+                  cursor: refreshing ? 'not-allowed' : 'pointer',
+                  opacity: refreshing ? 0.6 : 1,
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => !refreshing && (e.target.style.background = '#7c3aed')}
+                onMouseLeave={(e) => !refreshing && (e.target.style.background = '#8b5cf6')}
+              >
+                {refreshing ? 'Refreshing...' : '↻ Refresh Now'}
+              </button>
+            </div>
           </div>
           <FilterBar selectedSentiment={selectedSentiment} onSentimentChange={setSelectedSentiment} />
         </div>

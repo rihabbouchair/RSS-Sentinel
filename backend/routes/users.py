@@ -20,10 +20,45 @@ class PreferencesRequest(BaseModel):
     topics: List[str]
     email: Optional[str] = None
     wants_email_digest: bool = False
+    language_preferences: Optional[List[str]] = None
 
 
 class VerifyEmailCodeRequest(BaseModel):
     code: str
+
+
+def normalize_topics(topics: List[str]) -> List[str]:
+    arabic_to_english = {
+        "إعلام": "World",
+        "رياضة": "Sport",
+        "اقتصاد": "Economy",
+        "تكنولوجيا": "Tech",
+        "صحة": "Health",
+        "سياسة": "Politics",
+        "تعليم": "Education",
+    }
+    
+    cleaned = []
+    seen = set()
+
+    for topic in topics:
+        raw = str(topic).strip()
+        if not raw:
+            continue
+        
+        normalized = arabic_to_english.get(raw, raw)
+        normalized = " ".join(normalized.split())
+        
+        if not normalized:
+            continue
+        
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(normalized)
+
+    return cleaned
 
 
 @router.put("/users/preferences")
@@ -36,19 +71,39 @@ def update_preferences(
     cursor = conn.cursor()
 
     try:
-        topics_json = json.dumps(request.topics)
+        normalized_topics = normalize_topics(request.topics)
+        topics_json = json.dumps(normalized_topics)
         normalized_email = request.email.strip().lower() if request.email else None
+        language_preferences = request.language_preferences or ["English"]
+        language_preferences_json = json.dumps(language_preferences)
 
         current_user_row = cursor.execute("""
-            SELECT email, pending_email, email_verified
+            SELECT topics, email, pending_email, email_verified
             FROM users
             WHERE id = ?
         """, (current_user["id"],)).fetchone()
 
         if not current_user_row:
             raise HTTPException(status_code=404, detail="User not found")
+        
+        old_topics = json.loads(current_user_row["topics"]) if current_user_row["topics"] else []
+        removed_topics = set(old_topics) - set(normalized_topics)
+        
+        if removed_topics:
+            for removed_topic in removed_topics:
+                cursor.execute("""
+                    DELETE FROM articles
+                    WHERE feed_id IN (
+                        SELECT id FROM feeds
+                        WHERE user_id = ? AND topic = ?
+                    )
+                """, (current_user["id"], removed_topic))
+                
+                cursor.execute("""
+                    DELETE FROM feeds
+                    WHERE user_id = ? AND topic = ?
+                """, (current_user["id"], removed_topic))
 
-        verified_email = current_user_row["email"]
         existing_pending_email = current_user_row["pending_email"]
         email_verified = bool(current_user_row["email_verified"])
 
@@ -64,7 +119,7 @@ def update_preferences(
             if conflict:
                 raise HTTPException(status_code=400, detail="Email already in use")
 
-            same_as_verified = email_verified and verified_email == normalized_email
+            same_as_verified = email_verified and current_user_row["email"] == normalized_email
             same_as_pending = existing_pending_email == normalized_email
 
             if not same_as_verified:
@@ -77,6 +132,7 @@ def update_preferences(
                     cursor.execute("""
                         UPDATE users
                         SET topics = ?,
+                            language_preferences = ?,
                             pending_email = ?,
                             email_verified = 0,
                             email_verification_code_hash = ?,
@@ -85,6 +141,7 @@ def update_preferences(
                         WHERE id = ?
                     """, (
                         topics_json,
+                        language_preferences_json,
                         normalized_email,
                         code_hash,
                         expires_at,
@@ -95,20 +152,22 @@ def update_preferences(
                 else:
                     cursor.execute("""
                         UPDATE users
-                        SET topics = ?, wants_email_digest = ?
+                        SET topics = ?, language_preferences = ?, wants_email_digest = ?
                         WHERE id = ?
                     """, (
                         topics_json,
+                        language_preferences_json,
                         1 if request.wants_email_digest else 0,
                         current_user["id"]
                     ))
             else:
                 cursor.execute("""
                     UPDATE users
-                    SET topics = ?, wants_email_digest = ?
+                    SET topics = ?, language_preferences = ?, wants_email_digest = ?
                     WHERE id = ?
                 """, (
                     topics_json,
+                    language_preferences_json,
                     1 if request.wants_email_digest else 0,
                     current_user["id"]
                 ))
@@ -116,6 +175,7 @@ def update_preferences(
             cursor.execute("""
                 UPDATE users
                 SET topics = ?,
+                    language_preferences = ?,
                     email = NULL,
                     pending_email = NULL,
                     email_verified = 0,
@@ -125,6 +185,7 @@ def update_preferences(
                 WHERE id = ?
             """, (
                 topics_json,
+                language_preferences_json,
                 1 if request.wants_email_digest else 0,
                 current_user["id"]
             ))
@@ -133,14 +194,14 @@ def update_preferences(
         existing_urls = {row["url"] for row in cursor.fetchall()}
 
         feeds_created = 0
-        for topic in request.topics:
-            feed_urls = get_feed_urls(topic)
-            for feed_url in feed_urls:
+        for topic in normalized_topics:
+            feed_urls_with_langs = get_feed_urls(topic, language_preferences)
+            for feed_url, language in feed_urls_with_langs:
                 if feed_url not in existing_urls:
                     cursor.execute("""
-                        INSERT INTO feeds (user_id, url, topic)
-                        VALUES (?, ?, ?)
-                    """, (current_user["id"], feed_url, topic))
+                        INSERT INTO feeds (user_id, url, topic, language)
+                        VALUES (?, ?, ?, ?)
+                    """, (current_user["id"], feed_url, topic, language))
                     feeds_created += 1
 
         conn.commit()

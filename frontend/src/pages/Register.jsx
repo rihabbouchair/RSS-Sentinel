@@ -19,6 +19,7 @@ export default function Register() {
   const [password, setPassword] = useState('');
   const [email, setEmail] = useState('');
   const [selectedTopics, setSelectedTopics] = useState([]);
+  const [languagePreferences, setLanguagePreferences] = useState(['English']);
   const [wantsDigest, setWantsDigest] = useState(false);
   const [error, setError] = useState(null);
   const [info, setInfo] = useState(null);
@@ -54,6 +55,7 @@ export default function Register() {
         email: email || null,
         topics: selectedTopics,
         wants_email_digest: wantsDigest,
+        language_preferences: languagePreferences,
       });
 
       login(result.token, result.user);
@@ -181,6 +183,51 @@ export default function Register() {
                   </label>
                 );
               })}
+            </div>
+          </div>
+
+          <div>
+            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              Article Languages
+            </label>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {['English', 'French', 'Arabic'].map((lang) => (
+                <label
+                  key={lang}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    background: languagePreferences.includes(lang)
+                      ? 'rgba(96, 165, 250, 0.2)'
+                      : 'rgba(255,255,255,0.03)',
+                    border: languagePreferences.includes(lang)
+                      ? '0.5px solid rgba(96, 165, 250, 0.4)'
+                      : '0.5px solid var(--border)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={languagePreferences.includes(lang)}
+                    onChange={() => {
+                      setLanguagePreferences((prev) =>
+                        prev.includes(lang)
+                          ? prev.filter((l) => l !== lang)
+                          : [...prev, lang]
+                      );
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>
+                    {lang}
+                  </span>
+                </label>
+              ))}
             </div>
           </div>
 

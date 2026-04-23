@@ -83,6 +83,44 @@ def infer_topic_fallback(title: str) -> str:
     return " ".join(words) if words else "Untitled Topic"
 
 
+def normalize_evidence_keywords(raw_keywords, candidate: dict) -> list[str]:
+    if isinstance(raw_keywords, list):
+        keywords = [str(item).strip() for item in raw_keywords if str(item).strip()]
+    else:
+        keywords = []
+
+    if not keywords:
+        combined = f"{candidate['title']} {candidate['excerpt']}"
+        tokens = re.findall(r"[\w\u0600-\u06FF\-]{4,}", combined, flags=re.UNICODE)
+        seen = set()
+        fallback = []
+        for token in tokens:
+            lower = token.lower()
+            if lower in seen:
+                continue
+            seen.add(lower)
+            fallback.append(token)
+            if len(fallback) >= 8:
+                break
+        keywords = fallback
+
+    deduped = []
+    seen = set()
+    for keyword in keywords:
+        cleaned = re.sub(r"\s+", " ", keyword).strip()[:32]
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        deduped.append(cleaned)
+        if len(deduped) >= 8:
+            break
+
+    return deduped
+
+
 def build_article_candidate(entry: dict, broad_topic: str) -> dict | None:
     title = entry.get("title", "Untitled")
     url = entry.get("link", "")
@@ -128,6 +166,8 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
     if not reasoning_summary:
         reasoning_summary = f"Topic inferred from the article title and excerpt in {candidate['language']}."
 
+    evidence_keywords = normalize_evidence_keywords(raw_analysis.get("evidence_keywords"), candidate)
+
     inference_log = {
         "model": OLLAMA_MODEL,
         "timestamp_utc": datetime.utcnow().isoformat(),
@@ -140,6 +180,7 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
         "topic": topic,
         "confidence_score": confidence_score,
         "reasoning_summary": reasoning_summary,
+        "evidence_keywords": evidence_keywords,
         "fallback_used": fallback_used,
     }
 
@@ -167,8 +208,11 @@ def analyze_with_ollama(candidate: dict) -> dict:
         "- Return a concise specific topic label of 2 to 5 words.\n"
         "- Good examples: 'US Tariff Policy', 'Tesla Earnings', 'Champions League', 'Breast Cancer Research'.\n"
         "- Never return vague topics like 'General News', 'Other', or 'News'.\n\n"
+        "Evidence rules:\n"
+        "- Provide 3 to 8 short evidence keywords found in the title/text that justify the topic/sentiment.\n"
+        "- Keep keywords concise and verbatim where possible.\n\n"
         "Return ONLY valid JSON with exactly these keys:\n"
-        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"Short explanation in under 20 words\"}\n\n"
+        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"Short explanation in under 20 words\",\"evidence_keywords\":[\"keyword1\",\"keyword2\"]}\n\n"
         f"User broad topic: {candidate['broad_topic']}\n"
         f"Detected article language: {candidate['language']}\n"
         f"Title: {candidate['title']}\n"
@@ -208,6 +252,7 @@ def analyze_with_ollama(candidate: dict) -> dict:
             "confidence_score": 0.35,
             "topic": infer_topic_fallback(candidate["title"]),
             "reasoning_summary": "Fallback heuristics used because the model request failed.",
+            "evidence_keywords": normalize_evidence_keywords(None, candidate),
         }
         return normalize_analysis(fallback, candidate, fallback_used=True)
 
@@ -225,16 +270,26 @@ def cleanup_old_articles(user_id: int):
     print(f"  Cleaned up {deleted} old articles for user {user_id}")
 
 
-def get_topic_article_count(user_id: int, broad_topic: str) -> int:
+def get_topic_article_count(user_id: int, broad_topic: str, language: str = None) -> int:
+    """Count articles for a topic, optionally filtered by language"""
     conn = get_conn()
     try:
-        return conn.execute("""
-            SELECT COUNT(*)
-            FROM articles
-            WHERE feed_id IN (
-                SELECT id FROM feeds WHERE user_id = ? AND topic = ?
-            )
-        """, (user_id, broad_topic)).fetchone()[0]
+        if language:
+            return conn.execute("""
+                SELECT COUNT(*)
+                FROM articles
+                WHERE feed_id IN (
+                    SELECT id FROM feeds WHERE user_id = ? AND topic = ? AND language = ?
+                )
+            """, (user_id, broad_topic, language)).fetchone()[0]
+        else:
+            return conn.execute("""
+                SELECT COUNT(*)
+                FROM articles
+                WHERE feed_id IN (
+                    SELECT id FROM feeds WHERE user_id = ? AND topic = ?
+                )
+            """, (user_id, broad_topic)).fetchone()[0]
     finally:
         conn.close()
 
@@ -258,24 +313,26 @@ def process_feed(feed: dict, user_id: int) -> int:
     feed_id = feed["id"]
     feed_url = feed["url"]
     broad_topic = feed["topic"]
+    feed_language = feed.get("language", "English")
     added = 0
 
-    print(f"\nProcessing feed: {broad_topic} ({feed_url})")
+    print(f"\nProcessing feed: {broad_topic} ({feed_language}) ({feed_url})")
 
     try:
-        topic_count = get_topic_article_count(user_id, broad_topic)
-        if topic_count >= MAX_ARTICLES_PER_TOPIC:
-            print(f"  Topic '{broad_topic}' already reached the cap of {MAX_ARTICLES_PER_TOPIC}, skipping.")
+        # Count articles for this topic in this specific language
+        language_topic_count = get_topic_article_count(user_id, broad_topic, feed_language)
+        if language_topic_count >= MAX_ARTICLES_PER_TOPIC:
+            print(f"  Topic '{broad_topic}' ({feed_language}) already reached the cap of {MAX_ARTICLES_PER_TOPIC}, skipping.")
             return 0
 
         desired_new_articles = min(
             ARTICLES_PER_FEED,
-            TARGET_READY_ARTICLES_PER_TOPIC - topic_count if topic_count < TARGET_READY_ARTICLES_PER_TOPIC else 0,
-            MAX_ARTICLES_PER_TOPIC - topic_count,
+            TARGET_READY_ARTICLES_PER_TOPIC - language_topic_count if language_topic_count < TARGET_READY_ARTICLES_PER_TOPIC else 0,
+            MAX_ARTICLES_PER_TOPIC - language_topic_count,
         )
 
         if desired_new_articles <= 0:
-            print(f"  Topic '{broad_topic}' already has at least {TARGET_READY_ARTICLES_PER_TOPIC} ready articles.")
+            print(f"  Topic '{broad_topic}' ({feed_language}) already has at least {TARGET_READY_ARTICLES_PER_TOPIC} ready articles.")
             return 0
 
         parsed = feedparser.parse(feed_url)
@@ -305,8 +362,8 @@ def process_feed(feed: dict, user_id: int) -> int:
                 try:
                     conn_insert.execute("""
                         INSERT OR IGNORE INTO articles
-                        (feed_id, title, url, summary, sentiment, confidence_score, topic, inference_log, published_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (feed_id, title, url, summary, sentiment, confidence_score, topic, language, inference_log, published_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         feed_id,
                         candidate["title"],
@@ -315,6 +372,7 @@ def process_feed(feed: dict, user_id: int) -> int:
                         analysis["sentiment"],
                         analysis["confidence_score"],
                         analysis["topic"],
+                        candidate["language"],
                         analysis["inference_log"],
                         candidate["published_at"],
                     ))

@@ -56,7 +56,7 @@ def init_db():
             sentiment TEXT,
             confidence_score REAL,
             topic TEXT,
-            category TEXT,
+            inference_log TEXT,
             published_at TEXT,
             fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (feed_id) REFERENCES feeds(id)
@@ -64,12 +64,12 @@ def init_db():
     """)
 
     try:
-        cursor.execute("ALTER TABLE articles ADD COLUMN category TEXT")
+        cursor.execute("ALTER TABLE articles ADD COLUMN confidence_score REAL")
     except Exception:
         pass
 
     try:
-        cursor.execute("ALTER TABLE articles ADD COLUMN confidence_score REAL")
+        cursor.execute("ALTER TABLE articles ADD COLUMN inference_log TEXT")
     except Exception:
         pass
 
@@ -89,11 +89,6 @@ def init_db():
             cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_def}")
         except Exception:
             pass
-
-    try:
-        cursor.execute("ALTER TABLE articles ADD COLUMN category TEXT")
-    except Exception:
-        pass
 
     # Create index only after pending_email definitely exists
     try:

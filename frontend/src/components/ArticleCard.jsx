@@ -26,24 +26,22 @@ function formatDate(dateString) {
     return dateString;
   }
 }
+
 const getConfidenceStyles = (score) => {
-  if (!score) return { color: '#94a3b8', label: 'Uncertain' };
+  if (!score && score !== 0) return { color: '#94a3b8', label: 'Uncertain' };
   if (score >= 0.9) return { color: '#22c55e', label: 'High Certainty' };
   if (score >= 0.7) return { color: '#a855f7', label: 'Reliable' };
   if (score >= 0.5) return { color: '#eab308', label: 'Average' };
   return { color: '#ef4444', label: 'Low Certainty' };
 };
+
 export default function ArticleCard({ article }) {
   const sentiment = article.sentiment || 'Neutral';
   const cfg = sentimentConfig[sentiment] || sentimentConfig.Neutral;
-  const topicColor = topicColors[article.category] || '#a78bfa';
+  const feedTopicColor = topicColors[article.feed_topic] || '#a78bfa';
 
   const hasConfidence =
     article.confidence_score !== null && article.confidence_score !== undefined;
-
-  const confidencePercent = hasConfidence
-    ? Math.round(Number(article.confidence_score) * 100)
-    : null;
 
   return (
     <div
@@ -111,48 +109,51 @@ export default function ArticleCard({ article }) {
           >
             {article.title}
           </a>
-          {/* Sentiment badge */}
-          <span style={{
-            flexShrink: 0,
-            fontSize: '10px', fontWeight: '500',
-            fontFamily: 'DM Mono, monospace',
-            padding: '3px 10px', borderRadius: '20px',
-            background: cfg.bg, color: cfg.color,
-            border: `0.5px solid ${cfg.border}`,
-            display: 'flex', alignItems: 'center', gap: '4px',
-          }}>
-            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: cfg.color }}></span>
-            {sentiment}
-          </span>
-          {/* confidence score */}
-          {article.confidence_score && (
-            <div style={{
+
+          <span
+            style={{
+              flexShrink: 0,
+              fontSize: '10px',
+              fontWeight: '500',
+              fontFamily: 'DM Mono, monospace',
+              padding: '3px 10px',
+              borderRadius: '20px',
+              background: cfg.bg,
+              color: cfg.color,
+              border: `0.5px solid ${cfg.border}`,
               display: 'flex',
               alignItems: 'center',
-              gap: '5px',
-              fontSize: '9px',
-              fontFamily: 'DM Mono, monospace',
-              color: getConfidenceStyles(article.confidence_score).color,
-              background: `${getConfidenceStyles(article.confidence_score).color}10`,
-              padding: '2px 8px',
-              borderRadius: '4px',
-              border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30`,
-              lineHeight: '1.2'
-            }}>
+              gap: '4px',
+            }}
+          >
+            <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: cfg.color }} />
+            {sentiment}
+          </span>
 
-              <span style={{ fontSize: '11px', verticalAlign: 'middle' }}>🛡️</span>
+          {hasConfidence && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
+                fontSize: '9px',
+                fontFamily: 'DM Mono, monospace',
+                color: getConfidenceStyles(article.confidence_score).color,
+                background: `${getConfidenceStyles(article.confidence_score).color}10`,
+                padding: '2px 8px',
+                borderRadius: '4px',
+                border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30`,
+                lineHeight: '1.2',
+              }}
+            >
               <span style={{ fontWeight: '500' }}>
                 {Math.round(article.confidence_score * 100)}%
               </span>
-
               <span style={{ opacity: 0.8, fontSize: '8px', marginLeft: '2px' }}>
                 ({getConfidenceStyles(article.confidence_score).label})
               </span>
             </div>
           )}
-
-
-
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
@@ -177,22 +178,22 @@ export default function ArticleCard({ article }) {
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {article.category && (
+          {article.feed_topic && (
             <span
               style={{
                 fontSize: '10px',
                 fontFamily: 'DM Mono, monospace',
                 padding: '2px 8px',
                 borderRadius: '4px',
-                background: `${topicColor}18`,
-                color: topicColor,
+                background: `${feedTopicColor}18`,
+                color: feedTopicColor,
               }}
             >
-              {article.category}
+              {article.feed_topic}
             </span>
           )}
 
-          {article.topic && article.topic !== article.category && (
+          {article.topic && (
             <span
               style={{
                 fontSize: '10px',

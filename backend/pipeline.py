@@ -1,18 +1,27 @@
 import feedparser
-import requests
 import json
+import os
+import re
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
+
+import requests
 from bs4 import BeautifulSoup
+from dotenv import load_dotenv
+
 from database import get_conn
 from email_service import send_digest
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
-from dotenv import load_dotenv
 
 load_dotenv()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-ARTICLES_PER_FEED = 5
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
+OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "45"))
+
+ARTICLES_PER_FEED = int(os.getenv("ARTICLES_PER_FEED", "5"))
+TARGET_READY_ARTICLES_PER_TOPIC = int(os.getenv("TARGET_READY_ARTICLES_PER_TOPIC", "5"))
+MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES_PER_TOPIC", "10"))
+MAX_ANALYSIS_CHARS = int(os.getenv("MAX_ANALYSIS_CHARS", "1400"))
 
 
 def clean_html(html_text: str) -> str:
@@ -22,74 +31,185 @@ def clean_html(html_text: str) -> str:
     return soup.get_text(separator=" ", strip=True)
 
 
-def extract_first_three_sentences(text: str) -> str:
+def extract_analysis_excerpt(text: str, max_sentences: int = 4) -> str:
     if not text:
         return ""
-    sentences = [s.strip() for s in text.split('.') if s.strip()]
-    return '. '.join(sentences[:3]) + '.' if sentences else ""
+
+    normalized = " ".join(text.split())
+    sentences = re.split(r"(?<=[.!?؟])\s+", normalized)
+    excerpt = " ".join(sentence.strip() for sentence in sentences[:max_sentences] if sentence.strip())
+
+    if not excerpt:
+        excerpt = normalized
+
+    return excerpt[:MAX_ANALYSIS_CHARS].strip()
 
 
-def analyze_with_ollama(title: str, first_three_sentences: str) -> dict:
+def detect_language(text: str) -> str:
+    if re.search(r"[\u0600-\u06FF]", text):
+        return "Arabic"
+    if re.search(r"[éèàùâêîôûçëïüœ]", text.lower()):
+        return "French"
+    return "English"
+
+
+def infer_sentiment_fallback(title: str, excerpt: str) -> str:
+    text = f"{title} {excerpt}".lower()
+
+    negative_keywords = [
+        "war", "attack", "killed", "death", "dead", "injured", "crash", "accident",
+        "fraud", "theft", "lawsuit", "accuses", "accused", "conflict", "drop",
+        "decline", "fall", "loss", "layoff", "layoffs", "risk", "crisis", "scandal",
+        "strike", "sanction", "warning", "earthquake", "flood", "fire",
+        "وفاة", "مقتل", "قتلى", "إصابة", "انقلاب", "حرب", "أزمة", "فضيحة", "تحذير",
+    ]
+    positive_keywords = [
+        "win", "won", "success", "successful", "growth", "record", "launch", "breakthrough",
+        "approved", "approval", "improve", "improved", "recovery", "recover", "partnership",
+        "raises", "expands", "expansion", "award", "profit", "profits", "surge",
+        "فوز", "نجاح", "نمو", "إطلاق", "ارتفاع", "تحسن", "تعاف", "إنجاز",
+    ]
+
+    if any(word in text for word in negative_keywords):
+        return "Negative"
+    if any(word in text for word in positive_keywords):
+        return "Positive"
+    return "Neutral"
+
+
+def infer_topic_fallback(title: str) -> str:
+    cleaned = re.sub(r"[^\w\s\-]", " ", title, flags=re.UNICODE)
+    words = [word for word in cleaned.split() if len(word.strip()) > 2][:4]
+    return " ".join(words) if words else "Untitled Topic"
+
+
+def build_article_candidate(entry: dict, broad_topic: str) -> dict | None:
+    title = entry.get("title", "Untitled")
+    url = entry.get("link", "")
+    if not url:
+        return None
+
+    content = entry.get("summary", entry.get("description", ""))
+    if "content" in entry and entry["content"]:
+        content = entry["content"][0].get("value", content)
+
+    cleaned_text = clean_html(content) or title
+    excerpt = extract_analysis_excerpt(cleaned_text)
+    published_at = entry.get("published", entry.get("updated", ""))
+    source_host = urlparse(url).netloc or "unknown"
+
+    return {
+        "title": title,
+        "url": url,
+        "excerpt": excerpt,
+        "published_at": published_at,
+        "broad_topic": broad_topic,
+        "source_host": source_host,
+        "language": detect_language(f"{title} {excerpt}"),
+    }
+
+
+def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool) -> dict:
+    sentiment = str(raw_analysis.get("sentiment", "")).strip().capitalize()
+    if sentiment not in {"Positive", "Negative", "Neutral"}:
+        sentiment = infer_sentiment_fallback(candidate["title"], candidate["excerpt"])
+
+    try:
+        confidence_score = float(raw_analysis.get("confidence_score", 0.5))
+    except (TypeError, ValueError):
+        confidence_score = 0.5
+    confidence_score = max(0.0, min(1.0, confidence_score))
+
+    topic = str(raw_analysis.get("topic", "")).strip()
+    if not topic or topic.lower() in {"general", "general news", "news", "other"}:
+        topic = infer_topic_fallback(candidate["title"])
+
+    reasoning_summary = str(raw_analysis.get("reasoning_summary", "")).strip()
+    if not reasoning_summary:
+        reasoning_summary = f"Topic inferred from the article title and excerpt in {candidate['language']}."
+
+    inference_log = {
+        "model": OLLAMA_MODEL,
+        "timestamp_utc": datetime.utcnow().isoformat(),
+        "broad_topic": candidate["broad_topic"],
+        "language": candidate["language"],
+        "source_host": candidate["source_host"],
+        "title": candidate["title"],
+        "excerpt": candidate["excerpt"],
+        "sentiment": sentiment,
+        "topic": topic,
+        "confidence_score": confidence_score,
+        "reasoning_summary": reasoning_summary,
+        "fallback_used": fallback_used,
+    }
+
+    return {
+        "sentiment": sentiment,
+        "confidence_score": confidence_score,
+        "topic": topic,
+        "inference_log": json.dumps(inference_log, ensure_ascii=False),
+    }
+
+
+def analyze_with_ollama(candidate: dict) -> dict:
     prompt = (
-        f"Analyze the sentiment of this news article for a user's feed.\n"
-        f"Title: {title}\n"
-        f"Text: {first_three_sentences}\n\n"
-        f"Guidelines:\n"
-        f"- 'Positive': News about progress, success, new launches, or positive growth.\n"
-        f"- 'Negative': News about conflicts, failures, drops in market, or problems.\n"
-        f"- 'Neutral': Purely factual reporting with no clear positive or negative impact.\n\n"
-        f"Respond ONLY with a valid JSON object:\n"
-        f"{{\"sentiment\": \"Positive\"/\"Negative\"/\"Neutral\", \"confidence_score\": float, \"topic\": \"string\"}}"
+        "You are an expert multilingual news analyst.\n"
+        "The article may be in English, French, or Arabic.\n"
+        "Understand the text semantically, then classify the specific real-world topic and sentiment.\n"
+        "Do not force the result to match the user's selected broad topic.\n"
+        "Return the topic and reasoning summary in English even if the article is Arabic or French.\n\n"
+        "Sentiment rules:\n"
+        "- Positive: progress, wins, launches, approvals, breakthroughs, growth, recovery.\n"
+        "- Negative: war, conflict, accusations, crashes, deaths, injuries, layoffs, risks, losses.\n"
+        "- Neutral: purely factual reporting with no clearly positive or negative development.\n"
+        "- Avoid overusing Neutral if the event clearly has positive or negative impact.\n\n"
+        "Topic rules:\n"
+        "- Return a concise specific topic label of 2 to 5 words.\n"
+        "- Good examples: 'US Tariff Policy', 'Tesla Earnings', 'Champions League', 'Breast Cancer Research'.\n"
+        "- Never return vague topics like 'General News', 'Other', or 'News'.\n\n"
+        "Return ONLY valid JSON with exactly these keys:\n"
+        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"Short explanation in under 20 words\"}\n\n"
+        f"User broad topic: {candidate['broad_topic']}\n"
+        f"Detected article language: {candidate['language']}\n"
+        f"Title: {candidate['title']}\n"
+        f"Text: {candidate['excerpt']}\n"
     )
+
     try:
         response = requests.post(
             f"{OLLAMA_URL}/api/generate",
             json={
-                "model": "gemma3:4b",
+                "model": OLLAMA_MODEL,
                 "prompt": prompt,
                 "stream": False,
-                "format": "json"
+                "format": "json",
+                "options": {
+                    "temperature": 0.1,
+                    "top_p": 0.9,
+                },
             },
-            timeout=120
+            timeout=OLLAMA_TIMEOUT,
         )
         response.raise_for_status()
         result = response.json()
         response_text = result.get("response", "")
         start_idx = response_text.find("{")
         end_idx = response_text.rfind("}") + 1
+
         if start_idx != -1 and end_idx > start_idx:
-            return json.loads(response_text[start_idx:end_idx])
-        raise ValueError("No JSON found")
+            parsed = json.loads(response_text[start_idx:end_idx])
+            return normalize_analysis(parsed, candidate, fallback_used=False)
+
+        raise ValueError("No JSON found in Ollama response")
     except Exception as e:
         print(f"Ollama analysis failed: {e}")
-        return {"sentiment": "Neutral", "confidence_score": 0.5, "topic": "General News"}
-
-
-def map_to_category(llm_topic: str, user_topics: list) -> str:
-    t = llm_topic.lower().strip()
-
-    topic_keywords = {
-        "AI": ["ai", "artificial intelligence", "machine learning", "neural", "llm", "chatgpt", "openai", "robot", "automation", "deep learning", "generative ai"],
-        "Tech": ["tech", "software", "hardware", "cyber", "digital", "computer", "internet", "app", "semiconductor", "smartphone", "gadget"],
-        "Politics": ["politic", "government", "election", "president", "minister", "law", "policy", "vote", "diplomacy", "war", "conflict", "military", "senate", "congress", "parliament"],
-        "Sport": ["sport", "football", "basketball", "tennis", "soccer", "olympic", "athlete", "championship", "league", "match", "tournament", "player", "coach", "club", "team", "fifa", "uefa", "nba", "nfl", "formula", "racing"],
-        "Economy": ["economy", "economic", "market", "stock", "finance", "trade", "gdp", "inflation", "bank", "investment", "oil", "price", "budget", "currency", "business", "company", "earnings"],
-        "Science": ["science", "research", "space", "nasa", "biology", "physics", "chemistry", "discovery", "experiment", "astronomy"],
-        "Health": ["health", "disease", "hospital", "medicine", "treatment", "epidemic", "virus", "cancer", "vaccine", "medical", "doctor"],
-        "Culture": ["culture", "art", "cinema", "music", "film", "religion", "social", "literature", "festival", "entertainment"],
-        "Environment": ["environment", "climate", "global warming", "pollution", "renewable", "energy", "ecology"],
-    }
-
-    for user_topic in user_topics:
-        if t == user_topic.lower():
-            return user_topic
-
-    for user_topic in user_topics:
-        keywords = topic_keywords.get(user_topic, [user_topic.lower()])
-        if any(kw in t for kw in keywords):
-            return user_topic
-
-    return user_topics[0] if user_topics else "General"
+        fallback = {
+            "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
+            "confidence_score": 0.35,
+            "topic": infer_topic_fallback(candidate["title"]),
+            "reasoning_summary": "Fallback heuristics used because the model request failed.",
+        }
+        return normalize_analysis(fallback, candidate, fallback_used=True)
 
 
 def cleanup_old_articles(user_id: int):
@@ -97,7 +217,7 @@ def cleanup_old_articles(user_id: int):
     conn.execute("""
         DELETE FROM articles
         WHERE feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
-        AND fetched_at < datetime('now', '-24 hours')
+          AND fetched_at < datetime('now', '-24 hours')
     """, (user_id,))
     conn.commit()
     deleted = conn.execute("SELECT changes()").fetchone()[0]
@@ -105,89 +225,109 @@ def cleanup_old_articles(user_id: int):
     print(f"  Cleaned up {deleted} old articles for user {user_id}")
 
 
-def get_feed_article_count(feed_id: int) -> int:
+def get_topic_article_count(user_id: int, broad_topic: str) -> int:
     conn = get_conn()
-    count = conn.execute(
-        "SELECT COUNT(*) FROM articles WHERE feed_id = ?", (feed_id,)
-    ).fetchone()[0]
-    conn.close()
-    return count
+    try:
+        return conn.execute("""
+            SELECT COUNT(*)
+            FROM articles
+            WHERE feed_id IN (
+                SELECT id FROM feeds WHERE user_id = ? AND topic = ?
+            )
+        """, (user_id, broad_topic)).fetchone()[0]
+    finally:
+        conn.close()
 
 
-def process_feed(feed: dict, user_topics: list) -> int:
+def get_existing_urls(urls: list[str]) -> set[str]:
+    if not urls:
+        return set()
+    conn = get_conn()
+    try:
+        placeholders = ",".join("?" for _ in urls)
+        rows = conn.execute(
+            f"SELECT url FROM articles WHERE url IN ({placeholders})",
+            urls,
+        ).fetchall()
+        return {row["url"] for row in rows}
+    finally:
+        conn.close()
+
+
+def process_feed(feed: dict, user_id: int) -> int:
     feed_id = feed["id"]
     feed_url = feed["url"]
-    feed_topic = feed["topic"]
+    broad_topic = feed["topic"]
     added = 0
 
-    print(f"\nProcessing feed: {feed_topic} ({feed_url})")
+    print(f"\nProcessing feed: {broad_topic} ({feed_url})")
+
     try:
-        existing_count = get_feed_article_count(feed_id)
-        slots_available = ARTICLES_PER_FEED - existing_count
-        if slots_available <= 0:
-            print(f"  Feed already has {existing_count} articles, skipping.")
+        topic_count = get_topic_article_count(user_id, broad_topic)
+        if topic_count >= MAX_ARTICLES_PER_TOPIC:
+            print(f"  Topic '{broad_topic}' already reached the cap of {MAX_ARTICLES_PER_TOPIC}, skipping.")
+            return 0
+
+        desired_new_articles = min(
+            ARTICLES_PER_FEED,
+            TARGET_READY_ARTICLES_PER_TOPIC - topic_count if topic_count < TARGET_READY_ARTICLES_PER_TOPIC else 0,
+            MAX_ARTICLES_PER_TOPIC - topic_count,
+        )
+
+        if desired_new_articles <= 0:
+            print(f"  Topic '{broad_topic}' already has at least {TARGET_READY_ARTICLES_PER_TOPIC} ready articles.")
             return 0
 
         parsed = feedparser.parse(feed_url)
         entries = parsed.get("entries", [])
-        print(f"  Found {len(entries)} entries, slots available: {slots_available}")
+        print(f"  Found {len(entries)} entries, need {desired_new_articles} more articles")
 
+        candidates = []
         for entry in entries:
-            if added >= slots_available:
-                break
+            candidate = build_article_candidate(entry, broad_topic)
+            if candidate:
+                candidates.append(candidate)
 
+        if not candidates:
+            print("  No valid entries found.")
+            return 0
+
+        existing_urls = get_existing_urls([candidate["url"] for candidate in candidates])
+        fresh_candidates = [candidate for candidate in candidates if candidate["url"] not in existing_urls]
+        fresh_candidates = fresh_candidates[:desired_new_articles]
+
+        for candidate in fresh_candidates:
             try:
-                title = entry.get("title", "Untitled")
-                url = entry.get("link", "")
-                if not url:
-                    continue
-
-                conn_check = get_conn()
-                existing = conn_check.execute(
-                    "SELECT id FROM articles WHERE url = ?", (url,)
-                ).fetchone()
-                conn_check.close()
-                if existing:
-                    continue
-
-                content = entry.get("summary", entry.get("description", ""))
-                if "content" in entry and entry["content"]:
-                    content = entry["content"][0].get("value", content)
-
-                cleaned_text = clean_html(content) or title
-                first_three = extract_first_three_sentences(cleaned_text)
-                published_at = entry.get("published", entry.get("updated", ""))
-
-                print(f"    Analyzing: {title[:50]}...")
-                analysis = analyze_with_ollama(title, first_three)
-
-                specific_topic = analysis.get("topic", "General News")
-                confidence = analysis.get("confidence_score", 0.0)
-                category = map_to_category(specific_topic, user_topics)
+                print(f"    Analyzing: {candidate['title'][:60]}...")
+                analysis = analyze_with_ollama(candidate)
 
                 conn_insert = get_conn()
                 try:
                     conn_insert.execute("""
                         INSERT OR IGNORE INTO articles
-                        (feed_id, title, url, summary, sentiment, confidence_score, topic, category, published_at)
+                        (feed_id, title, url, summary, sentiment, confidence_score, topic, inference_log, published_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         feed_id,
-                        title,
-                        url,
-                        first_three,
-                        analysis.get("sentiment", "Neutral"),
-                        confidence,
-                        specific_topic,
-                        category,
-                        published_at
+                        candidate["title"],
+                        candidate["url"],
+                        candidate["excerpt"],
+                        analysis["sentiment"],
+                        analysis["confidence_score"],
+                        analysis["topic"],
+                        analysis["inference_log"],
+                        candidate["published_at"],
                     ))
                     conn_insert.commit()
-                    added += 1
-                    print(f"    Added [{category} > {specific_topic}]: {title[:40]}...")
+
+                    if conn_insert.total_changes > 0:
+                        added += 1
+                        print(
+                            f"    Added [{broad_topic} > {analysis['topic']}] "
+                            f"({analysis['sentiment']}, {analysis['confidence_score']:.2f})"
+                        )
                 finally:
                     conn_insert.close()
-
             except Exception as e:
                 print(f"    Failed article: {e}")
                 continue
@@ -195,11 +335,10 @@ def process_feed(feed: dict, user_topics: list) -> int:
         conn_upd = get_conn()
         conn_upd.execute(
             "UPDATE feeds SET last_fetched_at = ? WHERE id = ?",
-            (datetime.utcnow().isoformat(), feed_id)
+            (datetime.utcnow().isoformat(), feed_id),
         )
         conn_upd.commit()
         conn_upd.close()
-
     except Exception as e:
         print(f"  Failed feed: {e}")
 
@@ -210,15 +349,9 @@ def run_pipeline_for_user(user_id: int):
     print(f"\n=== Pipeline started for user {user_id} at {datetime.utcnow()} UTC ===")
 
     conn = get_conn()
-    user_row = conn.execute(
-        "SELECT topics FROM users WHERE id = ?",
-        (user_id,)
-    ).fetchone()
-    user_topics = json.loads(user_row["topics"]) if user_row else []
-
-    feeds = [dict(f) for f in conn.execute(
-        "SELECT * FROM feeds WHERE user_id = ?",
-        (user_id,)
+    feeds = [dict(feed) for feed in conn.execute(
+        "SELECT * FROM feeds WHERE user_id = ? ORDER BY topic, id",
+        (user_id,),
     ).fetchall()]
     conn.close()
 
@@ -226,14 +359,11 @@ def run_pipeline_for_user(user_id: int):
         print(f"  No feeds found for user {user_id}, skipping.")
         return
 
-    print(f"Found {len(feeds)} feeds, topics: {user_topics}")
     cleanup_old_articles(user_id)
 
     articles_added = 0
-    with ThreadPoolExecutor(max_workers=max(1, len(feeds))) as executor:
-        futures = [executor.submit(process_feed, feed, user_topics) for feed in feeds]
-        for future in as_completed(futures):
-            articles_added += future.result()
+    for feed in feeds:
+        articles_added += process_feed(feed, user_id)
 
     print(f"\n=== Pipeline complete for user {user_id}: {articles_added} new articles ===")
 
@@ -241,7 +371,7 @@ def run_pipeline_for_user(user_id: int):
 def run_pipeline():
     print(f"\n=== Global pipeline started at {datetime.utcnow()} UTC ===")
     conn = get_conn()
-    users = [dict(u) for u in conn.execute("SELECT id FROM users").fetchall()]
+    users = [dict(user) for user in conn.execute("SELECT id FROM users").fetchall()]
     conn.close()
 
     print(f"Found {len(users)} users to process")
@@ -279,12 +409,13 @@ def send_daily_digest_for_user(user_id: int):
             pass
 
     since_24h = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-    articles_for_digest = [dict(r) for r in conn.execute("""
-        SELECT title, url, summary, sentiment, confidence_score, topic, category, published_at
-        FROM articles
-        WHERE feed_id IN (SELECT id FROM feeds WHERE user_id = ?)
-          AND fetched_at >= ?
-        ORDER BY fetched_at DESC
+    articles_for_digest = [dict(row) for row in conn.execute("""
+        SELECT a.title, a.url, a.summary, a.sentiment, a.confidence_score, a.topic, f.topic AS feed_topic, a.published_at
+        FROM articles a
+        INNER JOIN feeds f ON a.feed_id = f.id
+        WHERE f.user_id = ?
+          AND a.fetched_at >= ?
+        ORDER BY a.fetched_at DESC
         LIMIT 20
     """, (user_id, since_24h)).fetchall()]
 
@@ -309,7 +440,7 @@ def send_daily_digest_for_user(user_id: int):
 def send_daily_digests():
     print(f"\n=== Daily digest job started at {datetime.utcnow()} UTC ===")
     conn = get_conn()
-    users = [dict(u) for u in conn.execute("""
+    users = [dict(user) for user in conn.execute("""
         SELECT id
         FROM users
         WHERE wants_email_digest = 1

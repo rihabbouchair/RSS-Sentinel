@@ -90,12 +90,12 @@ def send_digest(user_email: str, articles: list) -> bool:
                     </a>
                 </h3>
                 <p style="color: #666; margin: 0 0 10px 0;">{article.get('summary', '')}</p>
-                <p style="color: #999; font-size: 12px; margin: 0;">
-                    <strong>Category:</strong> {article.get('category', 'Unknown')} |
-                    <strong>Topic:</strong> {article.get('topic', 'Unknown')} |
-                    <strong>Sentiment:</strong> {article.get('sentiment', 'Unknown')}
-                </p>
-            </div>
+                    <p style="color: #999; font-size: 12px; margin: 0;">
+                        <strong>Feed Topic:</strong> {article.get('feed_topic', 'Unknown')} |
+                        <strong>Topic:</strong> {article.get('topic', 'Unknown')} |
+                        <strong>Sentiment:</strong> {article.get('sentiment', 'Unknown')}
+                    </p>
+                </div>
         """)
 
     html_parts.append("""

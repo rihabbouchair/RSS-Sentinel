@@ -38,7 +38,7 @@ export default function Dashboard({ selectedTopic }) {
     if (!isAutoRefresh) setLoading(true);
     else setFetching(true);
     try {
-      const data = await getArticles({ category: selectedTopic, sentiment: selectedSentiment, limit: 100 });
+      const data = await getArticles({ feedTopic: selectedTopic, sentiment: selectedSentiment, limit: 100 });
       setArticles(data);
       if (!isAutoRefresh) setCurrentPage(1);
     } catch (error) {

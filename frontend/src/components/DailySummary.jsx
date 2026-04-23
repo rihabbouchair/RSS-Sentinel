@@ -87,7 +87,7 @@ export default function DailySummary({ articles }) {
     // Prepare article data for Claude
     const topicGroups = {};
     articles.forEach(a => {
-      const cat = a.category || 'Other';
+      const cat = a.feed_topic || 'Other';
       if (!topicGroups[cat]) topicGroups[cat] = { positive: 0, negative: 0, neutral: 0, titles: [] };
       const s = (a.sentiment || 'Neutral').toLowerCase();
       topicGroups[cat][s] = (topicGroups[cat][s] || 0) + 1;
@@ -97,7 +97,7 @@ export default function DailySummary({ articles }) {
     const topTitles = articles
       .sort((a, b) => (a.sentiment === 'Positive' ? -1 : 1))
       .slice(0, 12)
-      .map(a => `[${a.sentiment}] [${a.category}] ${a.title}`)
+      .map(a => `[${a.sentiment}] [${a.feed_topic || 'Other'}] ${a.title}`)
       .join('\n');
 
     const prompt = `Tu es un analyste de presse AI. Voici les actualités du ${new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} collectées depuis des flux RSS.

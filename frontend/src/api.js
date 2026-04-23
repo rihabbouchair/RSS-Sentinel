@@ -48,9 +48,9 @@ export async function getCurrentUser() {
   return parseJson(response, 'Failed to fetch user');
 }
 
-export async function getArticles({ category, sentiment, limit = 20 } = {}) {
+export async function getArticles({ feedTopic, sentiment, limit = 20 } = {}) {
   const params = new URLSearchParams();
-  if (category) params.append('category', category);
+  if (feedTopic) params.append('feed_topic', feedTopic);
   if (sentiment) params.append('sentiment', sentiment);
   params.append('limit', limit);
 

@@ -47,7 +47,7 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
       const counts = {};
       await Promise.all(data.topics.map(async (topic) => {
         try {
-          const articles = await getArticles({ category: topic, limit: 100 });
+          const articles = await getArticles({ feedTopic: topic, limit: 100 });
           counts[topic] = articles.length;
         } catch { counts[topic] = 0; }
       }));

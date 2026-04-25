@@ -1,10 +1,21 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const location = useLocation();
   const { logout, user } = useAuth();
   const navigate = useNavigate();
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved === 'light' || saved === 'dark') return saved;
+    return 'dark';
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('theme', theme);
+  }, [theme]);
 
   function handleLogout() {
     logout();
@@ -34,16 +45,27 @@ export default function Navbar() {
 
       {/* Right */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* Bell icon */}
-        <button style={{
+        {/* Theme switch */}
+        <button
+          onClick={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          style={{
           width: '32px', height: '32px', borderRadius: '8px',
           background: 'rgba(255,255,255,0.05)', border: '0.5px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', position: 'relative',
-        }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          </svg>
+        }}
+        >
+          {theme === 'dark' ? (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+              <circle cx="12" cy="12" r="4" />
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+            </svg>
+          ) : (
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3c0 .28 0 .56.02.84A7 7 0 0 0 21 12.79z" />
+            </svg>
+          )}
         </button>
 
         {/* User avatar + logout */}

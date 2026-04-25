@@ -32,11 +32,11 @@ export async function login(username, password) {
   return parseJson(response, 'Login failed');
 }
 
-export async function register({ username, password, email, topics, wants_email_digest, language_preferences }) {
+export async function register({ username, password, topics, wants_email_digest, language_preferences }) {
   const response = await fetch(`${API_BASE}/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password, email, topics, wants_email_digest, language_preferences }),
+    body: JSON.stringify({ username, password, topics, wants_email_digest, language_preferences }),
   });
   return parseJson(response, 'Registration failed');
 }
@@ -67,6 +67,13 @@ export async function getTopics() {
   return parseJson(response, 'Failed to fetch topics');
 }
 
+export async function getTopicCounts() {
+  const response = await fetch(`${API_BASE}/articles/topic-counts`, {
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to fetch topic counts');
+}
+
 export async function getFeeds() {
   const response = await fetch(`${API_BASE}/feeds`, {
     headers: getAuthHeaders(),
@@ -74,11 +81,11 @@ export async function getFeeds() {
   return parseJson(response, 'Failed to fetch feeds');
 }
 
-export async function updatePreferences({ topics, email, wants_email_digest, language_preferences }) {
+export async function updatePreferences({ topics, email, wants_email_digest, language_preferences, articles_per_topic }) {
   const response = await fetch(`${API_BASE}/users/preferences`, {
     method: 'PUT',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ topics, email, wants_email_digest, language_preferences }),
+    body: JSON.stringify({ topics, email, wants_email_digest, language_preferences, articles_per_topic }),
   });
   return parseJson(response, 'Failed to update preferences');
 }

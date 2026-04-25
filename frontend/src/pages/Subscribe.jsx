@@ -70,6 +70,7 @@ export default function Subscribe() {
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [languagePreferences, setLanguagePreferences] = useState(['English']);
   const [wantsDigest, setWantsDigest] = useState(false);
+  const [articlesPerTopic, setArticlesPerTopic] = useState(3);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -93,6 +94,7 @@ export default function Subscribe() {
       setSelectedTopics(user.topics || []);
       setLanguagePreferences(user.language_preferences || ['English']);
       setWantsDigest(Boolean(user.wants_email_digest));
+      setArticlesPerTopic(user.articles_per_topic || 3);
     } catch (error) {
       console.error('Failed to load user data:', error);
     }
@@ -135,6 +137,7 @@ export default function Subscribe() {
         email: email || null,
         wants_email_digest: wantsDigest,
         language_preferences: languagePreferences,
+        articles_per_topic: articlesPerTopic,
       });
 
       await loadUserData();
@@ -299,6 +302,23 @@ export default function Subscribe() {
                     </span>
                   </label>
                 ))}
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                Articles Per Topic <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(1-20, default 3)</span>
+              </label>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={articlesPerTopic}
+                onChange={(e) => setArticlesPerTopic(Math.max(1, Math.min(20, parseInt(e.target.value) || 3)))}
+                style={inputStyle}
+              />
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+                Controls how many articles are analyzed per topic with language distribution (English priority)
               </div>
             </div>
 

@@ -21,6 +21,7 @@ class PreferencesRequest(BaseModel):
     email: Optional[str] = None
     wants_email_digest: bool = False
     language_preferences: Optional[List[str]] = None
+    articles_per_topic: Optional[int] = None
 
 
 class VerifyEmailCodeRequest(BaseModel):
@@ -76,6 +77,7 @@ def update_preferences(
         normalized_email = request.email.strip().lower() if request.email else None
         language_preferences = request.language_preferences or ["English"]
         language_preferences_json = json.dumps(language_preferences)
+        articles_per_topic = request.articles_per_topic or 3
 
         current_user_row = cursor.execute("""
             SELECT topics, email, pending_email, email_verified
@@ -137,7 +139,8 @@ def update_preferences(
                             email_verified = 0,
                             email_verification_code_hash = ?,
                             email_verification_expires_at = ?,
-                            wants_email_digest = ?
+                            wants_email_digest = ?,
+                            articles_per_topic = ?
                         WHERE id = ?
                     """, (
                         topics_json,
@@ -146,29 +149,32 @@ def update_preferences(
                         code_hash,
                         expires_at,
                         1 if request.wants_email_digest else 0,
+                        articles_per_topic,
                         current_user["id"]
                     ))
                     message = "preferences updated, verification code sent"
                 else:
                     cursor.execute("""
                         UPDATE users
-                        SET topics = ?, language_preferences = ?, wants_email_digest = ?
+                        SET topics = ?, language_preferences = ?, wants_email_digest = ?, articles_per_topic = ?
                         WHERE id = ?
                     """, (
                         topics_json,
                         language_preferences_json,
                         1 if request.wants_email_digest else 0,
+                        articles_per_topic,
                         current_user["id"]
                     ))
             else:
                 cursor.execute("""
                     UPDATE users
-                    SET topics = ?, language_preferences = ?, wants_email_digest = ?
+                    SET topics = ?, language_preferences = ?, wants_email_digest = ?, articles_per_topic = ?
                     WHERE id = ?
                 """, (
                     topics_json,
                     language_preferences_json,
                     1 if request.wants_email_digest else 0,
+                    articles_per_topic,
                     current_user["id"]
                 ))
         else:
@@ -181,12 +187,14 @@ def update_preferences(
                     email_verified = 0,
                     email_verification_code_hash = NULL,
                     email_verification_expires_at = NULL,
-                    wants_email_digest = ?
+                    wants_email_digest = ?,
+                    articles_per_topic = ?
                 WHERE id = ?
             """, (
                 topics_json,
                 language_preferences_json,
                 1 if request.wants_email_digest else 0,
+                articles_per_topic,
                 current_user["id"]
             ))
 

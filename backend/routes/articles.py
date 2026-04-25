@@ -36,6 +36,7 @@ def get_articles(
         FROM articles a
         INNER JOIN feeds f ON a.feed_id = f.id
         WHERE f.user_id = ?
+          AND a.fetched_at >= datetime('now', '-24 hours')
     """
     params = [current_user["id"]]
 
@@ -75,6 +76,52 @@ def get_topics(current_user: dict = Depends(get_current_user)):
     topics = [row["topic"] for row in cursor.fetchall()]
     conn.close()
     return {"topics": topics}
+
+
+@router.get("/articles/topic-counts")
+def get_topic_counts(current_user: dict = Depends(get_current_user)):
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    user_row = cursor.execute(
+        "SELECT language_preferences FROM users WHERE id = ?",
+        (current_user["id"],),
+    ).fetchone()
+    language_preferences = []
+    if user_row and user_row[0]:
+        try:
+            language_preferences = json.loads(user_row[0])
+        except Exception:
+            language_preferences = ["English"]
+    else:
+        language_preferences = ["English"]
+
+    query = """
+        SELECT f.topic, COUNT(a.id) AS count
+        FROM feeds f
+        LEFT JOIN articles a ON a.feed_id = f.id
+           AND a.fetched_at >= datetime('now', '-24 hours')
+    """
+
+    params = []
+    if language_preferences:
+        placeholders = ", ".join("?" * len(language_preferences))
+        query += f" AND a.language IN ({placeholders})"
+        params.extend(language_preferences)
+
+    query += """
+        WHERE f.user_id = ?
+        GROUP BY f.topic
+        ORDER BY f.topic
+    """
+    params.append(current_user["id"])
+
+    cursor.execute(query, params)
+    rows = cursor.fetchall()
+    conn.close()
+
+    counts = {row["topic"]: row["count"] for row in rows}
+    return {"counts": counts}
 
 
 @router.post("/articles/refresh")

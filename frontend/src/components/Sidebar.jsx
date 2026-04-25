@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { getTopics, getArticles } from '../api';
+import { getTopics, getTopicCounts } from '../api';
 
 const topicColors = {
   AI: '#a78bfa',
@@ -42,15 +42,9 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
 
   async function loadTopics() {
     try {
-      const data = await getTopics();
-      setTopics(data.topics);
-      const counts = {};
-      await Promise.all(data.topics.map(async (topic) => {
-        try {
-          const articles = await getArticles({ feedTopic: topic, limit: 100 });
-          counts[topic] = articles.length;
-        } catch { counts[topic] = 0; }
-      }));
+      const [topicsData, countsData] = await Promise.all([getTopics(), getTopicCounts()]);
+      setTopics(topicsData.topics || []);
+      const counts = countsData?.counts || {};
       setTopicCounts(counts);
     } catch (error) {
       console.error('Failed to load topics:', error);

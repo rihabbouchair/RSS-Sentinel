@@ -17,12 +17,9 @@ const topicColors = {
 export default function Register() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [email, setEmail] = useState('');
   const [selectedTopics, setSelectedTopics] = useState([]);
   const [languagePreferences, setLanguagePreferences] = useState(['English']);
-  const [wantsDigest, setWantsDigest] = useState(false);
   const [error, setError] = useState(null);
-  const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const { login, token } = useAuth();
@@ -46,30 +43,17 @@ export default function Register() {
 
     setLoading(true);
     setError(null);
-    setInfo(null);
 
     try {
       const result = await apiRegister({
         username,
         password,
-        email: email || null,
         topics: selectedTopics,
-        wants_email_digest: wantsDigest,
+        wants_email_digest: false,
         language_preferences: languagePreferences,
       });
 
       login(result.token, result.user);
-
-      if (result.user.pending_email) {
-        setInfo(
-          result.email_verification_sent
-            ? 'Account created. We sent a verification code to your email.'
-            : 'Account created. Add SMTP credentials on the backend to send verification emails.'
-        );
-        navigate('/subscribe');
-        return;
-      }
-
       navigate('/');
     } catch (err) {
       setError(err.message || 'Registration failed');
@@ -123,13 +107,6 @@ export default function Register() {
               Password <span style={{ color: '#fb7185' }}>*</span>
             </label>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Choose a password" style={inputStyle} />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>
-              Email <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>(optional, verified with code)</span>
-            </label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="your@email.com" style={inputStyle} />
           </div>
 
           <div>
@@ -231,29 +208,9 @@ export default function Register() {
             </div>
           </div>
 
-          {email && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '8px', cursor: 'pointer', background: 'rgba(255,255,255,0.03)', border: '0.5px solid var(--border)' }}>
-              <div style={{ width: '16px', height: '16px', borderRadius: '4px', flexShrink: 0, background: wantsDigest ? '#7c3aed' : 'transparent', border: wantsDigest ? '1.5px solid #7c3aed' : '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {wantsDigest && (
-                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </div>
-              <input type="checkbox" checked={wantsDigest} onChange={(e) => setWantsDigest(e.target.checked)} style={{ display: 'none' }} />
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Receive daily email digest after email verification</span>
-            </label>
-          )}
-
           {error && (
             <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '12px', background: 'rgba(251,113,133,0.1)', color: '#fb7185', border: '0.5px solid rgba(251,113,133,0.25)' }}>
               {error}
-            </div>
-          )}
-
-          {info && (
-            <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '12px', background: 'rgba(56,189,248,0.1)', color: '#38bdf8', border: '0.5px solid rgba(56,189,248,0.25)' }}>
-              {info}
             </div>
           )}
 

@@ -32,6 +32,7 @@ def init_db():
             email_verification_code_hash TEXT,
             email_verification_expires_at TEXT,
             last_digest_sent_at TEXT,
+            articles_per_topic INTEGER DEFAULT 3,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -100,6 +101,7 @@ def init_db():
         ("email_verification_expires_at", "TEXT"),
         ("last_digest_sent_at", "TEXT"),
         ("wants_email_digest", "INTEGER DEFAULT 0"),
+        ("articles_per_topic", "INTEGER DEFAULT 3"),
     ]
 
     for column_name, column_def in columns_to_add:

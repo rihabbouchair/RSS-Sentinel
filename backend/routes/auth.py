@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from database import get_conn
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from feed_registry import get_feed_urls
-from pipeline import run_pipeline_for_user
+from pipeline import run_pipeline_for_user, prioritize_user_pipeline
 from email_service import (
     generate_verification_code,
     hash_verification_code,
@@ -19,7 +19,6 @@ router = APIRouter()
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    email: Optional[str] = None
     topics: List[str]
     wants_email_digest: bool = False
     language_preferences: Optional[List[str]] = None
@@ -45,6 +44,12 @@ def serialize_user(user_row):
     except (TypeError, ValueError):
         language_preferences = ["English"]
     
+    articles_per_topic = None
+    try:
+        articles_per_topic = user_row["articles_per_topic"]
+    except (KeyError, TypeError):
+        articles_per_topic = None
+    
     return {
         "id": user_row["id"],
         "username": user_row["username"],
@@ -54,6 +59,7 @@ def serialize_user(user_row):
         "language_preferences": language_preferences,
         "wants_email_digest": bool(user_row["wants_email_digest"]),
         "email_verified": bool(user_row["email_verified"]),
+        "articles_per_topic": articles_per_topic or 3,
     }
 
 
@@ -63,33 +69,10 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
     cursor = conn.cursor()
 
     try:
-        normalized_email = request.email.strip().lower() if request.email else None
-
-        if normalized_email:
-            existing_email = cursor.execute("""
-                SELECT id FROM users
-                WHERE email = ? OR pending_email = ?
-            """, (normalized_email, normalized_email)).fetchone()
-            if existing_email:
-                raise HTTPException(status_code=400, detail="Email already exists")
-
         password_hash = hash_password(request.password)
         topics_json = json.dumps(request.topics)
         language_preferences = request.language_preferences or ["English"]
         language_preferences_json = json.dumps(language_preferences)
-
-        email_verified = 0
-        pending_email = None
-        verification_code_hash = None
-        verification_expires_at = None
-        verification_sent = False
-
-        if normalized_email:
-            code = generate_verification_code()
-            pending_email = normalized_email
-            verification_code_hash = hash_verification_code(code)
-            verification_expires_at = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
-            verification_sent = send_verification_code(normalized_email, code)
 
         cursor.execute("""
             INSERT INTO users (
@@ -108,14 +91,14 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
         """, (
             request.username,
             None,
-            pending_email,
+            None,
             password_hash,
             topics_json,
             language_preferences_json,
-            1 if request.wants_email_digest else 0,
-            email_verified,
-            verification_code_hash,
-            verification_expires_at,
+            0,
+            0,
+            None,
+            None,
         ))
 
         user_id = cursor.lastrowid
@@ -131,20 +114,20 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
         conn.commit()
 
         cursor.execute("""
-            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified, articles_per_topic
             FROM users
             WHERE id = ?
         """, (user_id,))
         user = cursor.fetchone()
         conn.close()
 
+        prioritize_user_pipeline(user_id)
         background_tasks.add_task(run_pipeline_for_user, user_id)
         token = create_access_token(user_id)
 
         return {
             "token": token,
             "user": serialize_user(user),
-            "email_verification_sent": verification_sent,
         }
 
     except HTTPException:
@@ -164,7 +147,7 @@ def login(request: LoginRequest, background_tasks: BackgroundTasks):
 
     try:
         cursor.execute("""
-            SELECT id, username, email, pending_email, password_hash, topics, language_preferences, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, password_hash, topics, language_preferences, wants_email_digest, email_verified, articles_per_topic
             FROM users
             WHERE username = ?
         """, (request.username,))
@@ -178,6 +161,7 @@ def login(request: LoginRequest, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         token = create_access_token(user["id"])
+        prioritize_user_pipeline(user["id"])
         background_tasks.add_task(run_pipeline_for_user, user["id"])
 
         return {
@@ -198,7 +182,7 @@ def get_me(current_user: dict = Depends(get_current_user)):
 
     try:
         cursor.execute("""
-            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified
+            SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified, articles_per_topic
             FROM users
             WHERE id = ?
         """, (current_user["id"],))

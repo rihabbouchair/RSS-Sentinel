@@ -2,6 +2,8 @@ import feedparser
 import json
 import os
 import re
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from urllib.parse import urlparse
 
@@ -17,11 +19,92 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "45"))
+OLLAMA_RETRIES = int(os.getenv("OLLAMA_RETRIES", "1"))
 
 ARTICLES_PER_FEED = int(os.getenv("ARTICLES_PER_FEED", "5"))
 TARGET_READY_ARTICLES_PER_TOPIC = int(os.getenv("TARGET_READY_ARTICLES_PER_TOPIC", "5"))
 MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES_PER_TOPIC", "10"))
 MAX_ANALYSIS_CHARS = int(os.getenv("MAX_ANALYSIS_CHARS", "1400"))
+FEED_PIPELINE_WORKERS = int(os.getenv("FEED_PIPELINE_WORKERS", "2"))
+
+
+_pipeline_state_lock = threading.Lock()
+_priority_user_ids: list[int] = []
+_running_user_ids: set[int] = set()
+
+
+def prioritize_user_pipeline(user_id: int):
+    """Mark a user to be processed first in the next global pipeline pass."""
+    with _pipeline_state_lock:
+        if user_id in _priority_user_ids:
+            _priority_user_ids.remove(user_id)
+        _priority_user_ids.insert(0, user_id)
+
+
+def _claim_user_pipeline_slot(user_id: int) -> bool:
+    """Prevent concurrent duplicate runs for the same user."""
+    with _pipeline_state_lock:
+        if user_id in _running_user_ids:
+            return False
+        _running_user_ids.add(user_id)
+        return True
+
+
+def _release_user_pipeline_slot(user_id: int):
+    with _pipeline_state_lock:
+        _running_user_ids.discard(user_id)
+
+
+def calculate_language_distribution(articles_per_topic: int, language_preferences: list) -> dict:
+    """
+    Calculate how many articles per language based on user preferences.
+    English gets priority when distribution is uneven.
+    
+    Example:
+    - 5 articles, [English, Arabic]: 3 English, 2 Arabic
+    - 5 articles, [English, Arabic, French]: 2 English, 2 Arabic, 1 French
+      (English gets priority for remainder)
+    
+    Returns: {"English": 3, "Arabic": 2, ...}
+    """
+    if not language_preferences:
+        language_preferences = ["English"]
+    
+    # Start with base count for each language
+    base_count = articles_per_topic // len(language_preferences)
+    remainder = articles_per_topic % len(language_preferences)
+    
+    distribution = {}
+    for i, lang in enumerate(language_preferences):
+        distribution[lang] = base_count
+    
+    # Distribute remainder, with English getting priority
+    for i in range(remainder):
+        # Give extra articles to English first, then Arabic, then French
+        if "English" in distribution:
+            distribution["English"] += 1
+        elif "Arabic" in distribution:
+            distribution["Arabic"] += 1
+        elif "French" in distribution:
+            distribution["French"] += 1
+        else:
+            # Fallback: distribute to the first language
+            distribution[language_preferences[i % len(language_preferences)]] += 1
+    
+    return distribution
+
+
+def _get_global_user_order(default_user_ids: list[int]) -> list[int]:
+    with _pipeline_state_lock:
+        priority = [uid for uid in _priority_user_ids if uid in default_user_ids]
+        _priority_user_ids.clear()
+
+    if not priority:
+        return default_user_ids
+
+    seen = set(priority)
+    remainder = [uid for uid in default_user_ids if uid not in seen]
+    return priority + remainder
 
 
 def clean_html(html_text: str) -> str:
@@ -56,28 +139,116 @@ def detect_language(text: str) -> str:
 def infer_sentiment_fallback(title: str, excerpt: str) -> str:
     text = f"{title} {excerpt}".lower()
 
+    # Weighted multilingual lexicon reduces overuse of Neutral when model fallback is used.
     negative_keywords = [
         "war", "attack", "killed", "death", "dead", "injured", "crash", "accident",
         "fraud", "theft", "lawsuit", "accuses", "accused", "conflict", "drop",
         "decline", "fall", "loss", "layoff", "layoffs", "risk", "crisis", "scandal",
-        "strike", "sanction", "warning", "earthquake", "flood", "fire",
-        "وفاة", "مقتل", "قتلى", "إصابة", "انقلاب", "حرب", "أزمة", "فضيحة", "تحذير",
+        "strike", "sanction", "warning", "earthquake", "flood", "fire", "missile",
+        "murder", "blast", "explosion", "fatal", "hostage", "raid", "arrest",
+        "guerre", "attaque", "mort", "morts", "bless", "crise", "chute", "perte",
+        "sanction", "alerte", "incendie", "inondation", "explosion", "conflit",
+        "وفاة", "مقتل", "قتلى", "قتيل", "إصابة", "جرحى", "انقلاب", "حرب", "أزمة", "فضيحة",
+        "تحذير", "قصف", "هجوم", "انفجار", "خسارة", "تراجع", "انخفاض", "توتر", "اشتباكات",
+        "عقوبات", "اعتقال", "فساد", "إغلاق",
     ]
     positive_keywords = [
         "win", "won", "success", "successful", "growth", "record", "launch", "breakthrough",
         "approved", "approval", "improve", "improved", "recovery", "recover", "partnership",
-        "raises", "expands", "expansion", "award", "profit", "profits", "surge",
-        "فوز", "نجاح", "نمو", "إطلاق", "ارتفاع", "تحسن", "تعاف", "إنجاز",
+        "raises", "expands", "expansion", "award", "profit", "profits", "surge", "deal",
+        "agreement", "ceasefire", "stability", "boost", "innovation", "funding",
+        "victory", "qualify", "qualified", "advance", "advanced", "comeback", "clean sheet",
+        "victoire", "succes", "croissance", "record", "lancement", "accord", "reprise",
+        "amelior", "hausse", "benefice", "partenariat", "innovation",
+        "فوز", "نجاح", "نمو", "إطلاق", "ارتفاع", "تحسن", "تعاف", "إنجاز", "اتفاق",
+        "هدنة", "استقرار", "تقدم", "افتتاح", "أرباح", "ربح", "انتعاش", "تمويل",
     ]
 
-    if any(word in text for word in negative_keywords):
-        return "Negative"
-    if any(word in text for word in positive_keywords):
+    mild_negative_cues = [
+        "no plan", "rejected", "fails", "failure", "concern", "concerns", "tension", "uncertainty",
+        "injury", "injured", "ban", "banned", "suspended", "suspension", "controversy", "criticized",
+        "knocked out", "eliminated", "defeat", "lost", "loss",
+    ]
+    mild_positive_cues = [
+        "beats", "beat", "tops", "title", "champion", "champions", "breaks record", "record high",
+        "secures", "secure", "backed", "backing", "green light", "approved",
+    ]
+
+    positive_score = sum(1 for word in positive_keywords if word in text)
+    negative_score = sum(1 for word in negative_keywords if word in text)
+    positive_score += sum(1 for phrase in mild_positive_cues if phrase in text)
+    negative_score += sum(1 for phrase in mild_negative_cues if phrase in text)
+
+    score_delta = positive_score - negative_score
+    if score_delta >= 1:
         return "Positive"
+    if score_delta <= -1:
+        return "Negative"
+
+    # Tie-breaker: strong conflict/governance cues are usually not neutral in news context.
+    if any(token in text for token in ["حرب", "قصف", "هجوم", "sanction", "war", "attack"]):
+        return "Negative"
+
     return "Neutral"
 
 
-def infer_topic_fallback(title: str) -> str:
+def infer_topic_fallback(title: str, excerpt: str = "", broad_topic: str = "") -> str:
+    text = f"{title} {excerpt}".lower()
+
+    topic_keywords = {
+        "Politics": [
+            "politic", "election", "government", "minister", "parliament", "president", "diploma",
+            "policy", "white house", "sanction", "trump", "biden", "iran", "gaza", "ukraine",
+            "politique", "gouvernement", "ministre", "parlement", "president", "negociation", "diplom",
+            "انتخابات", "حكومة", "وزير", "الرئيس", "برلمان", "مفاوضات", "دبلوماس", "سياس", "إيران", "غزة", "أوكرانيا",
+        ],
+        "Economy": [
+            "econom", "inflation", "market", "stock", "gdp", "trade", "tariff", "oil", "bank", "crypto", "finance",
+            "economie", "inflation", "marche", "bourse", "banque", "financ",
+            "اقتصاد", "تضخم", "بورصة", "أسهم", "سوق", "نفط", "بنك", "دولار", "عملة", "استثمار", "تعرفة",
+        ],
+        "Technology": [
+            "tech", "ai", "artificial intelligence", "software", "app", "chip", "startup", "google", "microsoft", "apple",
+            "technologie", "numerique", "logiciel", "intelligence artificielle", "startup",
+            "تقنية", "تكنولوجيا", "ذكاء اصطناعي", "الذكاء الاصطناعي", "برمج", "تطبيق", "شريحة", "روبوت", "هاتف",
+        ],
+        "Science": [
+            "science", "research", "study", "experiment", "space", "nasa", "physics", "chemistry", "biology", "climate",
+            "recherche", "etude", "espace", "climat",
+            "علم", "بحث", "دراسة", "تجربة", "فضاء", "مناخ", "فيزياء", "كيمياء", "أحياء",
+        ],
+        "Health": [
+            "health", "hospital", "vaccine", "disease", "virus", "medical", "doctor", "drug", "cancer", "who",
+            "sante", "hopital", "vaccin", "maladie", "medecin", "cancer",
+            "صحة", "مستشفى", "لقاح", "مرض", "فيروس", "طبي", "دواء", "سرطان", "طبيب",
+        ],
+        "Education": [
+            "school", "student", "teacher", "university", "education", "curriculum", "exam", "campus", "classroom",
+            "ecole", "etudiant", "enseignant", "universite", "education", "examen",
+            "تعليم", "مدرسة", "طالب", "طلاب", "جامعة", "مناهج", "امتحان", "معلم", "وزارة التعليم",
+        ],
+        "Sports": [
+            "sport", "match", "league", "cup", "goal", "team", "coach", "fifa", "uefa", "champions",
+            "football", "basketball", "tennis",
+            "sport", "match", "ligue", "coupe", "equipe", "entraineur", "but",
+            "رياض", "مباراة", "الدوري", "كأس", "هدف", "فريق", "مدرب", "كرة", "بطولة",
+        ],
+    }
+
+    best_topic = ""
+    best_score = 0
+    for topic_label, keywords in topic_keywords.items():
+        score = sum(1 for kw in keywords if kw in text)
+        if score > best_score:
+            best_score = score
+            best_topic = topic_label
+
+    if best_topic and best_score > 0:
+        return best_topic
+
+    if broad_topic:
+        return broad_topic
+
     cleaned = re.sub(r"[^\w\s\-]", " ", title, flags=re.UNICODE)
     words = [word for word in cleaned.split() if len(word.strip()) > 2][:4]
     return " ".join(words) if words else "Untitled Topic"
@@ -160,16 +331,25 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
 
     topic = str(raw_analysis.get("topic", "")).strip()
     if not topic or topic.lower() in {"general", "general news", "news", "other"}:
-        topic = infer_topic_fallback(candidate["title"])
+        topic = infer_topic_fallback(candidate["title"], candidate["excerpt"], candidate["broad_topic"])
 
     reasoning_summary = str(raw_analysis.get("reasoning_summary", "")).strip()
     if not reasoning_summary:
         reasoning_summary = f"Topic inferred from the article title and excerpt in {candidate['language']}."
 
+    sentiment_reason = str(raw_analysis.get("sentiment_reason", "")).strip()
+    if not sentiment_reason:
+        sentiment_reason = f"Sentiment inferred from article signals in {candidate['language']}."
+
+    topic_reason = str(raw_analysis.get("topic_reason", "")).strip()
+    if not topic_reason:
+        topic_reason = "Topic inferred from dominant entities and keywords in title/excerpt."
+
     evidence_keywords = normalize_evidence_keywords(raw_analysis.get("evidence_keywords"), candidate)
 
     inference_log = {
         "model": OLLAMA_MODEL,
+        "prompt_version": "v2_multilingual_explainable",
         "timestamp_utc": datetime.utcnow().isoformat(),
         "broad_topic": candidate["broad_topic"],
         "language": candidate["language"],
@@ -180,6 +360,8 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
         "topic": topic,
         "confidence_score": confidence_score,
         "reasoning_summary": reasoning_summary,
+        "sentiment_reason": sentiment_reason,
+        "topic_reason": topic_reason,
         "evidence_keywords": evidence_keywords,
         "fallback_used": fallback_used,
     }
@@ -196,13 +378,14 @@ def analyze_with_ollama(candidate: dict) -> dict:
     prompt = (
         "You are an expert multilingual news analyst.\n"
         "The article may be in English, French, or Arabic.\n"
-        "Understand the text semantically, then classify the specific real-world topic and sentiment.\n"
+        "Understand the text semantically, then classify sentiment and a specific topic.\n"
         "Do not force the result to match the user's selected broad topic.\n"
-        "Return the topic and reasoning summary in English even if the article is Arabic or French.\n\n"
+        "Return the topic and all reason fields in English even if the article is Arabic or French.\n"
+        "Use the article text meaning; do not translate literally word by word.\n\n"
         "Sentiment rules:\n"
-        "- Positive: progress, wins, launches, approvals, breakthroughs, growth, recovery.\n"
-        "- Negative: war, conflict, accusations, crashes, deaths, injuries, layoffs, risks, losses.\n"
-        "- Neutral: purely factual reporting with no clearly positive or negative development.\n"
+        "- Positive: progress, wins, launches, approvals, breakthroughs, growth, recovery, cooperation.\n"
+        "- Negative: war, conflict, accusations, crashes, deaths, injuries, layoffs, risks, losses, sanctions.\n"
+        "- Neutral: purely factual reporting with no clear positive or negative impact.\n"
         "- Avoid overusing Neutral if the event clearly has positive or negative impact.\n\n"
         "Topic rules:\n"
         "- Return a concise specific topic label of 2 to 5 words.\n"
@@ -212,49 +395,57 @@ def analyze_with_ollama(candidate: dict) -> dict:
         "- Provide 3 to 8 short evidence keywords found in the title/text that justify the topic/sentiment.\n"
         "- Keep keywords concise and verbatim where possible.\n\n"
         "Return ONLY valid JSON with exactly these keys:\n"
-        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"Short explanation in under 20 words\",\"evidence_keywords\":[\"keyword1\",\"keyword2\"]}\n\n"
+        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"General classification summary under 25 words\",\"sentiment_reason\":\"Why sentiment is this label under 20 words\",\"topic_reason\":\"Why this topic label fits under 20 words\",\"evidence_keywords\":[\"keyword1\",\"keyword2\"]}\n\n"
         f"User broad topic: {candidate['broad_topic']}\n"
         f"Detected article language: {candidate['language']}\n"
         f"Title: {candidate['title']}\n"
         f"Text: {candidate['excerpt']}\n"
     )
 
-    try:
-        response = requests.post(
-            f"{OLLAMA_URL}/api/generate",
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False,
-                "format": "json",
-                "options": {
-                    "temperature": 0.1,
-                    "top_p": 0.9,
+    last_error = None
+    for attempt in range(1, OLLAMA_RETRIES + 2):
+        try:
+            response = requests.post(
+                f"{OLLAMA_URL}/api/generate",
+                json={
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json",
+                    "options": {
+                        "temperature": 0.1,
+                        "top_p": 0.9,
+                    },
                 },
-            },
-            timeout=OLLAMA_TIMEOUT,
-        )
-        response.raise_for_status()
-        result = response.json()
-        response_text = result.get("response", "")
-        start_idx = response_text.find("{")
-        end_idx = response_text.rfind("}") + 1
+                timeout=OLLAMA_TIMEOUT,
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "")
+            start_idx = response_text.find("{")
+            end_idx = response_text.rfind("}") + 1
 
-        if start_idx != -1 and end_idx > start_idx:
-            parsed = json.loads(response_text[start_idx:end_idx])
-            return normalize_analysis(parsed, candidate, fallback_used=False)
+            if start_idx != -1 and end_idx > start_idx:
+                parsed = json.loads(response_text[start_idx:end_idx])
+                return normalize_analysis(parsed, candidate, fallback_used=False)
 
-        raise ValueError("No JSON found in Ollama response")
-    except Exception as e:
-        print(f"Ollama analysis failed: {e}")
-        fallback = {
-            "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
-            "confidence_score": 0.35,
-            "topic": infer_topic_fallback(candidate["title"]),
-            "reasoning_summary": "Fallback heuristics used because the model request failed.",
-            "evidence_keywords": normalize_evidence_keywords(None, candidate),
-        }
-        return normalize_analysis(fallback, candidate, fallback_used=True)
+            raise ValueError("No JSON found in Ollama response")
+        except Exception as e:
+            last_error = e
+            print(f"Ollama analysis attempt {attempt} failed: {e}")
+
+    fallback = {
+        "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
+        "confidence_score": 0.35,
+        "topic": infer_topic_fallback(candidate["title"], candidate["excerpt"], candidate["broad_topic"]),
+        "reasoning_summary": "Fallback heuristics used because model analysis was unavailable.",
+        "sentiment_reason": "Keyword scoring on multilingual article text indicates this sentiment.",
+        "topic_reason": "Topic category matched by strongest multilingual keyword signals.",
+        "evidence_keywords": normalize_evidence_keywords(None, candidate),
+    }
+    if last_error:
+        print(f"Ollama analysis failed after retries: {last_error}")
+    return normalize_analysis(fallback, candidate, fallback_used=True)
 
 
 def cleanup_old_articles(user_id: int):
@@ -309,12 +500,15 @@ def get_existing_urls(urls: list[str]) -> set[str]:
         conn.close()
 
 
-def process_feed(feed: dict, user_id: int) -> int:
+def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None) -> int:
     feed_id = feed["id"]
     feed_url = feed["url"]
     broad_topic = feed["topic"]
     feed_language = feed.get("language", "English")
     added = 0
+    
+    # Use provided target or fall back to environment default
+    target_articles = language_per_topic_target or TARGET_READY_ARTICLES_PER_TOPIC
 
     print(f"\nProcessing feed: {broad_topic} ({feed_language}) ({feed_url})")
 
@@ -327,7 +521,7 @@ def process_feed(feed: dict, user_id: int) -> int:
 
         desired_new_articles = min(
             ARTICLES_PER_FEED,
-            TARGET_READY_ARTICLES_PER_TOPIC - language_topic_count if language_topic_count < TARGET_READY_ARTICLES_PER_TOPIC else 0,
+            target_articles - language_topic_count if language_topic_count < target_articles else 0,
             MAX_ARTICLES_PER_TOPIC - language_topic_count,
         )
 
@@ -404,37 +598,93 @@ def process_feed(feed: dict, user_id: int) -> int:
 
 
 def run_pipeline_for_user(user_id: int):
-    print(f"\n=== Pipeline started for user {user_id} at {datetime.utcnow()} UTC ===")
-
-    conn = get_conn()
-    feeds = [dict(feed) for feed in conn.execute(
-        "SELECT * FROM feeds WHERE user_id = ? ORDER BY topic, id",
-        (user_id,),
-    ).fetchall()]
-    conn.close()
-
-    if not feeds:
-        print(f"  No feeds found for user {user_id}, skipping.")
+    if not _claim_user_pipeline_slot(user_id):
+        print(f"\n=== Pipeline already running for user {user_id}, skipping duplicate trigger ===")
         return
 
-    cleanup_old_articles(user_id)
+    print(f"\n=== Pipeline started for user {user_id} at {datetime.utcnow()} UTC ===")
 
-    articles_added = 0
-    for feed in feeds:
-        articles_added += process_feed(feed, user_id)
+    try:
+        conn = get_conn()
+        
+        # Get user preferences
+        user_row = conn.execute(
+            "SELECT articles_per_topic, language_preferences FROM users WHERE id = ?",
+            (user_id,)
+        ).fetchone()
+        
+        if user_row:
+            articles_per_topic = user_row["articles_per_topic"] or 3
+            try:
+                language_preferences = json.loads(user_row["language_preferences"] or "[\"English\"]")
+            except (json.JSONDecodeError, TypeError):
+                language_preferences = ["English"]
+        else:
+            articles_per_topic = 3
+            language_preferences = ["English"]
+        
+        # Calculate per-language target
+        language_distribution = calculate_language_distribution(articles_per_topic, language_preferences)
+        print(f"  User {user_id} preference: {articles_per_topic} articles/topic, distributed as {language_distribution}")
+        
+        feeds = [dict(feed) for feed in conn.execute(
+            "SELECT * FROM feeds WHERE user_id = ? ORDER BY topic, id",
+            (user_id,),
+        ).fetchall()]
+        conn.close()
 
-    print(f"\n=== Pipeline complete for user {user_id}: {articles_added} new articles ===")
+        if not feeds:
+            print(f"  No feeds found for user {user_id}, skipping.")
+            return
+
+        cleanup_old_articles(user_id)
+
+        articles_added = 0
+        max_workers = max(1, min(FEED_PIPELINE_WORKERS, len(feeds), 4))
+
+        if max_workers == 1:
+            for feed in feeds:
+                feed_language = feed.get("language", "English")
+                target_for_feed = language_distribution.get(feed_language, articles_per_topic)
+                articles_added += process_feed(feed, user_id, target_for_feed)
+        else:
+            print(f"  Processing {len(feeds)} feeds in parallel with {max_workers} workers")
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [
+                    executor.submit(
+                        process_feed,
+                        feed,
+                        user_id,
+                        language_distribution.get(feed.get("language", "English"), articles_per_topic)
+                    )
+                    for feed in feeds
+                ]
+                for future in as_completed(futures):
+                    try:
+                        articles_added += future.result()
+                    except Exception as e:
+                        print(f"  Feed worker failed: {e}")
+
+        print(f"\n=== Pipeline complete for user {user_id}: {articles_added} new articles ===")
+    finally:
+        _release_user_pipeline_slot(user_id)
 
 
 def run_pipeline():
     print(f"\n=== Global pipeline started at {datetime.utcnow()} UTC ===")
     conn = get_conn()
-    users = [dict(user) for user in conn.execute("SELECT id FROM users").fetchall()]
+    users = [dict(user) for user in conn.execute("SELECT id FROM users ORDER BY id").fetchall()]
     conn.close()
 
-    print(f"Found {len(users)} users to process")
-    for user in users:
-        run_pipeline_for_user(user["id"])
+    default_user_ids = [user["id"] for user in users]
+    ordered_user_ids = _get_global_user_order(default_user_ids)
+
+    print(f"Found {len(ordered_user_ids)} users to process")
+    if ordered_user_ids != default_user_ids:
+        print(f"Prioritized global order: {ordered_user_ids}")
+
+    for user_id in ordered_user_ids:
+        run_pipeline_for_user(user_id)
 
     print(f"=== Global pipeline complete at {datetime.utcnow()} UTC ===\n")
 

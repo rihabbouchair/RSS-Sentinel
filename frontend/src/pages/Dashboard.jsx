@@ -41,6 +41,11 @@ export default function Dashboard({ selectedTopic }) {
     try {
       const data = await getArticles({ feedTopic: selectedTopic, sentiment: selectedSentiment, limit: 100 });
       setArticles(data);
+
+      // Keep summary source fresh even while filters are active.
+      const summaryData = await getArticles({ limit: 100 });
+      setAllArticles(summaryData);
+
       if (!isAutoRefresh) setCurrentPage(1);
     } catch (error) {
       console.error('Failed to load articles:', error);
@@ -57,6 +62,7 @@ export default function Dashboard({ selectedTopic }) {
       // Wait 2 seconds then reload articles
       setTimeout(() => {
         loadArticles();
+        loadAllArticles();
         setRefreshing(false);
       }, 2000);
     } catch (error) {
@@ -101,7 +107,7 @@ export default function Dashboard({ selectedTopic }) {
       <div style={{ maxWidth: '900px', margin: '0 auto' }}>
 
         {/* Daily AI Summary — always visible at top */}
-        <DailySummary articles={allArticles} />
+        <DailySummary articles={allArticles.length > 0 ? allArticles : articles} />
 
         {/* KPI cards */}
         {!loading && articles.length > 0 && (

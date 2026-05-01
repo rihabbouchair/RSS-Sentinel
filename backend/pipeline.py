@@ -27,6 +27,27 @@ MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES_PER_TOPIC", "10"))
 MAX_ANALYSIS_CHARS = int(os.getenv("MAX_ANALYSIS_CHARS", "1400"))
 FEED_PIPELINE_WORKERS = int(os.getenv("FEED_PIPELINE_WORKERS", "2"))
 
+VAGUE_TOPIC_LABELS = {
+    "general",
+    "general news",
+    "news",
+    "other",
+    "update",
+    "breaking",
+    "latest",
+    "story",
+}
+
+TOPIC_STOPWORDS = {
+    "the", "a", "an", "and", "or", "for", "with", "from", "into", "about", "after", "before",
+    "over", "under", "between", "amid", "amidst", "near", "new", "today", "live", "video",
+    "this", "that", "these", "those", "its", "their", "his", "her", "our", "your",
+    "les", "des", "une", "un", "et", "ou", "pour", "avec", "dans", "sur", "apres", "avant",
+    "ce", "cet", "cette", "ces", "son", "sa", "ses", "leur", "leurs", "plus", "moins",
+    "من", "الى", "إلى", "على", "في", "عن", "مع", "بعد", "قبل", "هذا", "هذه", "ذلك", "تلك",
+    "هناك", "حول", "عند", "ضمن", "بين", "كانت", "كان", "يكون", "تكون", "أجل", "اليوم",
+}
+
 
 _pipeline_state_lock = threading.Lock()
 _priority_user_ids: list[int] = []
@@ -134,6 +155,68 @@ def detect_language(text: str) -> str:
     if re.search(r"[éèàùâêîôûçëïüœ]", text.lower()):
         return "French"
     return "English"
+
+
+def derive_topic_from_title(title: str, max_words: int = 4) -> str:
+    cleaned = re.sub(r"[^\w\s\-\u0600-\u06FF]", " ", title, flags=re.UNICODE)
+    raw_tokens = [token.strip("-_") for token in cleaned.split() if token.strip("-_")]
+
+    tokens = []
+    for token in raw_tokens:
+        lower = token.lower()
+        if lower in TOPIC_STOPWORDS:
+            continue
+        if re.fullmatch(r"\d+", token):
+            continue
+
+        is_arabic = bool(re.search(r"[\u0600-\u06FF]", token))
+        if not is_arabic and len(token) < 3:
+            continue
+
+        tokens.append(token)
+        if len(tokens) >= max_words:
+            break
+
+    if not tokens:
+        return ""
+
+    return " ".join(tokens)
+
+
+def normalize_topic_label(raw_topic: str, candidate: dict, confidence_score: float) -> str:
+    topic = re.sub(r"\s+", " ", (raw_topic or "")).strip(" .,-")
+    broad_topic = str(candidate.get("broad_topic", "")).strip()
+
+    title_based_topic = derive_topic_from_title(candidate.get("title", ""))
+    fallback_topic = infer_topic_fallback(
+        candidate.get("title", ""),
+        candidate.get("excerpt", ""),
+        broad_topic,
+    )
+
+    if not topic:
+        return fallback_topic
+
+    topic_lower = topic.lower()
+    broad_lower = broad_topic.lower()
+    one_word_topic = len(topic.split()) <= 1
+
+    if topic_lower in VAGUE_TOPIC_LABELS:
+        return fallback_topic
+
+    if one_word_topic and topic_lower in {
+        "politics", "economy", "technology", "science", "health", "education", "sports",
+        "tech", "sport", "business", "world", "climate", "crypto", "travel", "gaming", "ai",
+    }:
+        return title_based_topic or fallback_topic
+
+    if broad_lower and topic_lower == broad_lower:
+        return title_based_topic or fallback_topic
+
+    if confidence_score < 0.40 and title_based_topic:
+        return title_based_topic
+
+    return topic
 
 
 def infer_sentiment_fallback(title: str, excerpt: str) -> str:
@@ -244,14 +327,12 @@ def infer_topic_fallback(title: str, excerpt: str = "", broad_topic: str = "") -
             best_topic = topic_label
 
     if best_topic and best_score > 0:
-        return best_topic
+        return derive_topic_from_title(title) or best_topic
 
     if broad_topic:
         return broad_topic
 
-    cleaned = re.sub(r"[^\w\s\-]", " ", title, flags=re.UNICODE)
-    words = [word for word in cleaned.split() if len(word.strip()) > 2][:4]
-    return " ".join(words) if words else "Untitled Topic"
+    return derive_topic_from_title(title) or "Untitled Topic"
 
 
 def normalize_evidence_keywords(raw_keywords, candidate: dict) -> list[str]:
@@ -329,9 +410,11 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
         confidence_score = 0.5
     confidence_score = max(0.0, min(1.0, confidence_score))
 
-    topic = str(raw_analysis.get("topic", "")).strip()
-    if not topic or topic.lower() in {"general", "general news", "news", "other"}:
-        topic = infer_topic_fallback(candidate["title"], candidate["excerpt"], candidate["broad_topic"])
+    topic = normalize_topic_label(
+        str(raw_analysis.get("topic", "")).strip(),
+        candidate,
+        confidence_score,
+    )
 
     reasoning_summary = str(raw_analysis.get("reasoning_summary", "")).strip()
     if not reasoning_summary:
@@ -349,7 +432,7 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
 
     inference_log = {
         "model": OLLAMA_MODEL,
-        "prompt_version": "v2_multilingual_explainable",
+        "prompt_version": "v3_simple_multilingual",
         "timestamp_utc": datetime.utcnow().isoformat(),
         "broad_topic": candidate["broad_topic"],
         "language": candidate["language"],
@@ -376,24 +459,13 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
 
 def analyze_with_ollama(candidate: dict) -> dict:
     prompt = (
-        "You are an expert multilingual news analyst.\n"
-        "The article may be in English, French, or Arabic.\n"
-        "Understand the text semantically, then classify sentiment and a specific topic.\n"
-        "Do not force the result to match the user's selected broad topic.\n"
-        "Return the topic and all reason fields in English even if the article is Arabic or French.\n"
-        "Use the article text meaning; do not translate literally word by word.\n\n"
-        "Sentiment rules:\n"
-        "- Positive: progress, wins, launches, approvals, breakthroughs, growth, recovery, cooperation.\n"
-        "- Negative: war, conflict, accusations, crashes, deaths, injuries, layoffs, risks, losses, sanctions.\n"
-        "- Neutral: purely factual reporting with no clear positive or negative impact.\n"
-        "- Avoid overusing Neutral if the event clearly has positive or negative impact.\n\n"
-        "Topic rules:\n"
-        "- Return a concise specific topic label of 2 to 5 words.\n"
-        "- Good examples: 'US Tariff Policy', 'Tesla Earnings', 'Champions League', 'Breast Cancer Research'.\n"
-        "- Never return vague topics like 'General News', 'Other', or 'News'.\n\n"
-        "Evidence rules:\n"
-        "- Provide 3 to 8 short evidence keywords found in the title/text that justify the topic/sentiment.\n"
-        "- Keep keywords concise and verbatim where possible.\n\n"
+        "You are a multilingual news classifier.\n"
+        "Classify the article's sentiment and one specific topic from the meaning of the text.\n"
+        "Keep it simple and fast. Do not overthink.\n"
+        "Return all text fields in English.\n"
+        "Use the main entity/event in the title as the topic anchor when possible.\n"
+        "Use a concise topic label, not vague labels like General News, Other, or News.\n"
+        "Give short reasons and a few evidence keywords.\n\n"
         "Return ONLY valid JSON with exactly these keys:\n"
         "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"General classification summary under 25 words\",\"sentiment_reason\":\"Why sentiment is this label under 20 words\",\"topic_reason\":\"Why this topic label fits under 20 words\",\"evidence_keywords\":[\"keyword1\",\"keyword2\"]}\n\n"
         f"User broad topic: {candidate['broad_topic']}\n"
@@ -401,6 +473,17 @@ def analyze_with_ollama(candidate: dict) -> dict:
         f"Title: {candidate['title']}\n"
         f"Text: {candidate['excerpt']}\n"
     )
+    def build_fallback(reason: str) -> dict:
+        fallback = {
+            "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
+            "confidence_score": 0.35,
+            "topic": infer_topic_fallback(candidate["title"], candidate["excerpt"], candidate["broad_topic"]),
+            "reasoning_summary": reason,
+            "sentiment_reason": "Keyword scoring on multilingual article text indicates this sentiment.",
+            "topic_reason": "Topic category matched by strongest multilingual keyword signals.",
+            "evidence_keywords": normalize_evidence_keywords(None, candidate),
+        }
+        return normalize_analysis(fallback, candidate, fallback_used=True)
 
     last_error = None
     for attempt in range(1, OLLAMA_RETRIES + 2):
@@ -430,22 +513,16 @@ def analyze_with_ollama(candidate: dict) -> dict:
                 return normalize_analysis(parsed, candidate, fallback_used=False)
 
             raise ValueError("No JSON found in Ollama response")
+        except requests.exceptions.ReadTimeout as e:
+            print(f"Ollama analysis timeout for article '{candidate['title'][:60]}...': {e}")
+            return build_fallback("Fallback heuristics used because Ollama timed out.")
         except Exception as e:
             last_error = e
             print(f"Ollama analysis attempt {attempt} failed: {e}")
 
-    fallback = {
-        "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
-        "confidence_score": 0.35,
-        "topic": infer_topic_fallback(candidate["title"], candidate["excerpt"], candidate["broad_topic"]),
-        "reasoning_summary": "Fallback heuristics used because model analysis was unavailable.",
-        "sentiment_reason": "Keyword scoring on multilingual article text indicates this sentiment.",
-        "topic_reason": "Topic category matched by strongest multilingual keyword signals.",
-        "evidence_keywords": normalize_evidence_keywords(None, candidate),
-    }
     if last_error:
         print(f"Ollama analysis failed after retries: {last_error}")
-    return normalize_analysis(fallback, candidate, fallback_used=True)
+    return build_fallback("Fallback heuristics used because model analysis was unavailable.")
 
 
 def cleanup_old_articles(user_id: int):
@@ -670,6 +747,45 @@ def run_pipeline_for_user(user_id: int):
         _release_user_pipeline_slot(user_id)
 
 
+def run_pipeline_for_user_topic(user_id: int, topic: str):
+    """Run the pipeline only for feeds that match the given topic for a user."""
+    if not _claim_user_pipeline_slot(user_id):
+        print(f"\n=== Topic pipeline already running for user {user_id}, skipping duplicate trigger ===")
+        return
+
+    print(f"\n=== Topic pipeline started for user {user_id}, topic '{topic}' at {datetime.utcnow()} UTC ===")
+    try:
+        conn = get_conn()
+        feeds = [dict(feed) for feed in conn.execute(
+            "SELECT * FROM feeds WHERE user_id = ? AND topic = ? ORDER BY id",
+            (user_id, topic),
+        ).fetchall()]
+        conn.close()
+
+        if not feeds:
+            print(f"  No feeds found for user {user_id} with topic '{topic}', skipping.")
+            return
+
+        articles_added = 0
+        max_workers = max(1, min(FEED_PIPELINE_WORKERS, len(feeds), 4))
+
+        if max_workers == 1:
+            for feed in feeds:
+                articles_added += process_feed(feed, user_id)
+        else:
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(process_feed, feed, user_id) for feed in feeds]
+                for future in as_completed(futures):
+                    try:
+                        articles_added += future.result()
+                    except Exception as e:
+                        print(f"  Feed worker failed: {e}")
+
+        print(f"\n=== Topic pipeline complete for user {user_id}, topic '{topic}': {articles_added} new articles ===")
+    finally:
+        _release_user_pipeline_slot(user_id)
+
+
 def run_pipeline():
     print(f"\n=== Global pipeline started at {datetime.utcnow()} UTC ===")
     conn = get_conn()
@@ -762,3 +878,82 @@ def send_daily_digests():
         send_daily_digest_for_user(user["id"])
 
     print(f"=== Daily digest job complete at {datetime.utcnow()} UTC ===\n")
+
+
+def copy_seed_articles_to_user(user_id: int, topics: list = None):
+    """Copy pre-seeded articles from seed user (user_id=0) to a new user.
+    This allows new users to see instant articles for their selected topics.
+    """
+    if user_id == 0:
+        return  # Don't copy to seed user itself
+    
+    conn = get_conn()
+    try:
+        # Get the new user's feeds
+        if topics:
+            placeholders = ",".join("?" * len(topics))
+            user_feeds = conn.execute(f"""
+                SELECT id, topic, language FROM feeds WHERE user_id = ? AND topic IN ({placeholders})
+            """, [user_id] + topics).fetchall()
+        else:
+            user_feeds = conn.execute(
+                "SELECT id, topic, language FROM feeds WHERE user_id = ?",
+                (user_id,)
+            ).fetchall()
+        
+        if not user_feeds:
+            conn.close()
+            return
+        
+        # Build mapping of (new_feed_id, seed_feed_id)
+        seed_feed_ids = []
+        for feed in user_feeds:
+            topic, language = feed["topic"], feed["language"]
+            seed_feed = conn.execute(
+                "SELECT id FROM feeds WHERE user_id = 0 AND topic = ? AND language = ?",
+                (topic, language)
+            ).fetchone()
+            if seed_feed:
+                seed_feed_ids.append((feed["id"], seed_feed["id"]))
+        
+        if not seed_feed_ids:
+            conn.close()
+            return
+        
+        # Copy articles from seed feeds to new user's feeds
+        copied = 0
+        for new_feed_id, seed_feed_id in seed_feed_ids:
+            articles = conn.execute(
+                "SELECT title, url, summary, sentiment, confidence_score, topic, language, inference_log, published_at FROM articles WHERE feed_id = ?",
+                (seed_feed_id,)
+            ).fetchall()
+            
+            for article in articles:
+                try:
+                    conn.execute("""
+                        INSERT OR IGNORE INTO articles
+                        (feed_id, title, url, summary, sentiment, confidence_score, topic, language, inference_log, published_at, fetched_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        new_feed_id,
+                        article["title"],
+                        article["url"],
+                        article["summary"],
+                        article["sentiment"],
+                        article["confidence_score"],
+                        article["topic"],
+                        article["language"],
+                        article["inference_log"],
+                        article["published_at"],
+                        datetime.utcnow().isoformat()
+                    ))
+                    conn.commit()
+                    copied += 1
+                except Exception as e:
+                    print(f"Failed to copy article: {e}")
+                    continue
+        
+        if copied > 0:
+            print(f"Copied {copied} seed articles to user {user_id}")
+    finally:
+        conn.close()

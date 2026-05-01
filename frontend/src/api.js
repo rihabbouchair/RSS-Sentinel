@@ -114,3 +114,13 @@ export async function refreshArticles() {
   });
   return parseJson(response, 'Failed to refresh articles');
 }
+
+export async function refreshTopic(topic) {
+  const params = new URLSearchParams();
+  if (topic) params.append('topic', topic);
+  const response = await fetch(`${API_BASE}/articles/refresh-topic?${params.toString()}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to refresh topic');
+}

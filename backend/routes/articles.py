@@ -2,10 +2,11 @@ from fastapi import APIRouter, Query, Depends
 from typing import Optional
 import json
 from threading import Thread
+from fastapi import Query
 
 from database import get_conn
 from auth import get_current_user
-from pipeline import run_pipeline_for_user
+from pipeline import run_pipeline_for_user, run_pipeline_for_user_topic
 
 router = APIRouter()
 
@@ -60,6 +61,36 @@ def get_articles(
     cursor.execute(query, params)
     articles = [dict(row) for row in cursor.fetchall()]
     conn.close()
+    # If a topic was requested but no fresh articles exist, return a small fallback pool
+    # and trigger an async topic refresh in background.
+    if feed_topic and len(articles) == 0:
+        # Fetch recent articles across the user's feeds as a fallback
+        conn2 = get_conn()
+        cursor2 = conn2.cursor()
+        cursor2.execute("""
+            SELECT a.*, f.topic AS feed_topic
+            FROM articles a
+            INNER JOIN feeds f ON a.feed_id = f.id
+            WHERE f.user_id = ?
+            ORDER BY a.fetched_at DESC
+            LIMIT 5
+        """, (current_user["id"],))
+        fallback = [dict(row) for row in cursor2.fetchall()]
+        conn2.close()
+
+        # mark fallback articles so frontend can detect and trigger polling if desired
+        for a in fallback:
+            a["is_fallback"] = True
+
+        # Trigger async topic refresh (non-blocking)
+        def run_topic_async():
+            run_pipeline_for_user_topic(current_user["id"], feed_topic)
+
+        thread = Thread(target=run_topic_async, daemon=True)
+        thread.start()
+
+        return fallback
+
     return articles
 
 
@@ -135,3 +166,15 @@ def refresh_articles(current_user: dict = Depends(get_current_user)):
     thread.start()
     
     return {"status": "refreshing", "message": "Pipeline started for your articles. Check back in a few seconds."}
+
+
+@router.post("/articles/refresh-topic")
+def refresh_topic(topic: str = Query(...), current_user: dict = Depends(get_current_user)):
+    """Trigger an immediate pipeline run only for feeds matching `topic` for the current user."""
+    def run_topic_async():
+        run_pipeline_for_user_topic(current_user["id"], topic)
+
+    thread = Thread(target=run_topic_async, daemon=True)
+    thread.start()
+
+    return {"status": "refreshing", "message": f"Refreshing topic {topic} for your feeds."}

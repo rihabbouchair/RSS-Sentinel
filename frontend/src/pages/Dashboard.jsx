@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getArticles, refreshArticles } from '../api';
+import { getArticles, refreshArticles, refreshTopic } from '../api';
 import ArticleCard from '../components/ArticleCard';
 import FilterBar from '../components/FilterBar';
 import DailySummary from '../components/DailySummary';
@@ -42,6 +42,12 @@ export default function Dashboard({ selectedTopic }) {
       const data = await getArticles({ feedTopic: selectedTopic, sentiment: selectedSentiment, limit: 100 });
       setArticles(data);
 
+      // If backend returned fallback articles (marked with is_fallback), trigger a topic refresh
+      // and poll until real topic-specific articles are available.
+      if (selectedTopic && data && data.length > 0 && data.some(a => a.is_fallback)) {
+        triggerTopicPrewarm(selectedTopic);
+      }
+
       // Keep summary source fresh even while filters are active.
       const summaryData = await getArticles({ limit: 100 });
       setAllArticles(summaryData);
@@ -53,6 +59,31 @@ export default function Dashboard({ selectedTopic }) {
       setLoading(false);
       setFetching(false);
     }
+  }
+
+  async function triggerTopicPrewarm(topic) {
+    try {
+      await refreshTopic(topic);
+    } catch (err) {
+      console.error('Failed to request topic refresh:', err);
+    }
+
+    // Poll every 2s up to 20s for new non-fallback articles
+    const start = Date.now();
+    const interval = setInterval(async () => {
+      try {
+        const latest = await getArticles({ feedTopic: topic, limit: 20 });
+        const nonFallback = latest.filter(a => !a.is_fallback);
+        if (nonFallback.length > 0 || Date.now() - start > 20000) {
+          // update list with whichever we have (prefer non-fallback)
+          setArticles(nonFallback.length > 0 ? latest : latest);
+          setFetching(false);
+          clearInterval(interval);
+        }
+      } catch (err) {
+        console.error('Polling for topic articles failed:', err);
+      }
+    }, 2000);
   }
 
   async function handleRefreshPipeline() {

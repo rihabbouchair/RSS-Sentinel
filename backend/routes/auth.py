@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from database import get_conn
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from feed_registry import get_feed_urls
-from pipeline import run_pipeline_for_user, prioritize_user_pipeline
+from pipeline import run_pipeline_for_user, prioritize_user_pipeline, copy_seed_articles_to_user
 from email_service import (
     generate_verification_code,
     hash_verification_code,
@@ -112,6 +112,9 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
                 """, (user_id, feed_url, topic, language))
 
         conn.commit()
+        
+        # Copy pre-seeded articles to new user for instant display
+        copy_seed_articles_to_user(user_id, request.topics)
 
         cursor.execute("""
             SELECT id, username, email, pending_email, topics, language_preferences, wants_email_digest, email_verified, articles_per_topic

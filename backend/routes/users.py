@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from database import get_conn
 from feed_registry import get_feed_urls
 from auth import get_current_user
-from pipeline import run_pipeline_for_user
+from pipeline import run_pipeline_for_user, copy_seed_articles_to_user
 from email_service import (
     generate_verification_code,
     hash_verification_code,
@@ -213,6 +213,11 @@ def update_preferences(
                     feeds_created += 1
 
         conn.commit()
+
+        # Copy already-seeded articles for all current topics so the feed looks instant
+        # while the background pipeline refreshes and fills in anything missing.
+        copy_seed_articles_to_user(current_user["id"], normalized_topics)
+
         conn.close()
 
         background_tasks.add_task(run_pipeline_for_user, current_user["id"])

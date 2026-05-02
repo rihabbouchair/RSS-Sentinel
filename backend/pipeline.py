@@ -17,15 +17,16 @@ from email_service import send_digest
 load_dotenv()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma3:4b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "45"))
 OLLAMA_RETRIES = int(os.getenv("OLLAMA_RETRIES", "1"))
 
 ARTICLES_PER_FEED = int(os.getenv("ARTICLES_PER_FEED", "5"))
-TARGET_READY_ARTICLES_PER_TOPIC = int(os.getenv("TARGET_READY_ARTICLES_PER_TOPIC", "5"))
+TARGET_READY_ARTICLES_PER_TOPIC = int(os.getenv("TARGET_READY_ARTICLES_PER_TOPIC", "4"))
 MAX_ARTICLES_PER_TOPIC = int(os.getenv("MAX_ARTICLES_PER_TOPIC", "10"))
 MAX_ANALYSIS_CHARS = int(os.getenv("MAX_ANALYSIS_CHARS", "1400"))
 FEED_PIPELINE_WORKERS = int(os.getenv("FEED_PIPELINE_WORKERS", "2"))
+OLLAMA_MAX_CONCURRENT_REQUESTS = int(os.getenv("OLLAMA_MAX_CONCURRENT_REQUESTS", "1"))
 
 VAGUE_TOPIC_LABELS = {
     "general",
@@ -48,10 +49,118 @@ TOPIC_STOPWORDS = {
     "هناك", "حول", "عند", "ضمن", "بين", "كانت", "كان", "يكون", "تكون", "أجل", "اليوم",
 }
 
+TOPIC_SYNONYMS = {
+    # English
+    "tech": "Tech", "technology": "Tech",
+    "artificial intelligence": "AI", "machine learning": "AI",
+    "deep learning": "AI", "llm": "AI", "chatgpt": "AI",
+    "science": "Science",
+    "politics": "Politics", "political": "Politics", "policy": "Politics",
+    "economy": "Economy", "economics": "Economy",
+    "business": "Business",
+    "finance": "Finance", "financial": "Finance",
+    "investing": "Investing", "investment": "Investing",
+    "stock market": "Stock Market", "stocks": "Stock Market",
+    "health": "Health", "medical": "Health", "medicine": "Health",
+    "mental health": "Mental Health", "fitness": "Fitness",
+    "education": "Education",
+    "sports": "Sport", "sport": "Sport",
+    "football": "Football", "soccer": "Football",
+    "basketball": "Basketball", "tennis": "Tennis",
+    "formula 1": "Formula 1", "f1": "Formula 1",
+    "entertainment": "Entertainment",
+    "world": "World",
+    "climate": "Climate", "environment": "Environment",
+    "energy": "Energy",
+    "crypto": "Crypto", "cryptocurrency": "Crypto", "bitcoin": "Crypto",
+    "travel": "Travel", "tourism": "Travel",
+    "gaming": "Gaming", "games": "Gaming",
+    "cybersecurity": "Cybersecurity", "cyber": "Cybersecurity",
+    "space": "Space", "astronomy": "Space",
+    "geopolitics": "Geopolitics", "diplomacy": "Diplomacy",
+    "military": "Military", "defense": "Military", "war": "Military",
+    "terrorism": "Terrorism", "crime": "Crime", "corruption": "Corruption",
+    "law": "Law", "justice": "Law",
+    "immigration": "Immigration", "human rights": "Human Rights",
+    "startups": "Startups", "startup": "Startups",
+    "robotics": "Robotics", "biotechnology": "Biotechnology",
+    "quantum": "Quantum",
+    "music": "Music", "cinema": "Cinema", "film": "Cinema",
+    "fashion": "Fashion", "food": "Food", "cooking": "Food",
+    "real estate": "Real Estate", "housing": "Real Estate",
+    "agriculture": "Agriculture", "protests": "Protests",
+    "natural disasters": "Natural Disasters",
+    "culture": "Culture", "elections": "Elections",
+    # French
+    "politique": "Politics", "economie": "Economy", "économie": "Economy",
+    "sante": "Health", "santé": "Health",
+    "technologie": "Tech", "numérique": "Tech",
+    "intelligence artificielle": "AI",
+    "éducation": "Education",
+    "divertissement": "Entertainment", "voyage": "Travel",
+    "jeux": "Gaming", "sécurité": "Cybersecurity",
+    "environnement": "Environment", "espace": "Space",
+    "monde": "World", "militaire": "Military",
+    "terrorisme": "Terrorism", "criminalité": "Crime",
+    "immigration": "Immigration", "immobilier": "Real Estate",
+    "mode": "Fashion", "cuisine": "Food",
+    "musique": "Music", "cinéma": "Cinema",
+    "élections": "Elections",
+    # Arabic
+    "تقنية": "Tech", "تكنولوجيا": "Tech",
+    "ذكاء اصطناعي": "AI", "الذكاء الاصطناعي": "AI",
+    "سياسة": "Politics", "السياسة": "Politics",
+    "انتخابات": "Elections",
+    "اقتصاد": "Economy", "الاقتصاد": "Economy",
+    "أعمال": "Business", "تجارة": "Business",
+    "تمويل": "Finance", "استثمار": "Investing",
+    "بورصة": "Stock Market", "أسهم": "Stock Market",
+    "صحة": "Health", "الصحة": "Health", "طب": "Health",
+    "صحة نفسية": "Mental Health", "لياقة": "Fitness",
+    "رياضة": "Sport", "الرياضة": "Sport",
+    "كرة القدم": "Football", "كرة السلة": "Basketball", "تنس": "Tennis",
+    "فورمولا 1": "Formula 1",
+    "تعليم": "Education", "التعليم": "Education",
+    "ترفيه": "Entertainment",
+    "مناخ": "Climate", "بيئة": "Environment", "طاقة": "Energy",
+    "عملة رقمية": "Crypto", "بيتكوين": "Crypto",
+    "سفر": "Travel", "سياحة": "Travel",
+    "ألعاب": "Gaming",
+    "أمن سيبراني": "Cybersecurity", "قرصنة": "Cybersecurity",
+    "فضاء": "Space", "الفضاء": "Space",
+    "علوم": "Science", "عالم": "World",
+    "جيوسياسة": "Geopolitics", "دبلوماسية": "Diplomacy",
+    "عسكري": "Military", "حرب": "Military",
+    "إرهاب": "Terrorism", "جريمة": "Crime", "فساد": "Corruption",
+    "قانون": "Law", "هجرة": "Immigration",
+    "حقوق الإنسان": "Human Rights",
+    "شركات ناشئة": "Startups", "روبوتات": "Robotics",
+    "موسيقى": "Music", "سينما": "Cinema", "أفلام": "Cinema",
+    "موضة": "Fashion", "طعام": "Food",
+    "عقارات": "Real Estate", "زراعة": "Agriculture",
+    "احتجاجات": "Protests", "كوارث": "Natural Disasters",
+    "ثقافة": "Culture",
+}
+
+# Known canonical topics used for mapping and validation
+KNOWN_TOPICS = {
+    "AI", "Tech", "Politics", "Sport", "Economy", "Science", "Health",
+    "Business", "Entertainment", "World", "Climate", "Crypto", "Education",
+    "Travel", "Gaming", "Cybersecurity", "Space", "Finance", "Football",
+    "Basketball", "Tennis", "Formula 1", "Military", "Elections", "Law",
+    "Immigration", "Human Rights", "Environment", "Energy", "Robotics",
+    "Biotechnology", "Music", "Cinema", "Fashion", "Food", "Real Estate",
+    "Agriculture", "Protests", "Natural Disasters", "Culture", "Geopolitics",
+    "Diplomacy", "Corruption", "Crime", "Terrorism", "Mental Health",
+    "Stock Market", "Investing", "Startups", "Fitness", "Quantum",
+}
+
 
 _pipeline_state_lock = threading.Lock()
 _priority_user_ids: list[int] = []
 _running_user_ids: set[int] = set()
+_current_logged_in_user = None
+_ollama_semaphore = threading.Semaphore(max(1, OLLAMA_MAX_CONCURRENT_REQUESTS))
 
 
 def prioritize_user_pipeline(user_id: int):
@@ -60,6 +169,14 @@ def prioritize_user_pipeline(user_id: int):
         if user_id in _priority_user_ids:
             _priority_user_ids.remove(user_id)
         _priority_user_ids.insert(0, user_id)
+
+
+def set_logged_in_user(user_id: int):
+    """Set the currently logged-in user. Pipeline will only run for this user."""
+    global _current_logged_in_user
+    with _pipeline_state_lock:
+        _current_logged_in_user = user_id
+        print(f"[Pipeline] Logged-in user set to: {user_id}")
 
 
 def _claim_user_pipeline_slot(user_id: int) -> bool:
@@ -77,17 +194,7 @@ def _release_user_pipeline_slot(user_id: int):
 
 
 def calculate_language_distribution(articles_per_topic: int, language_preferences: list) -> dict:
-    """
-    Calculate how many articles per language based on user preferences.
-    English gets priority when distribution is uneven.
-    
-    Example:
-    - 5 articles, [English, Arabic]: 3 English, 2 Arabic
-    - 5 articles, [English, Arabic, French]: 2 English, 2 Arabic, 1 French
-      (English gets priority for remainder)
-    
-    Returns: {"English": 3, "Arabic": 2, ...}
-    """
+  
     if not language_preferences:
         language_preferences = ["English"]
     
@@ -184,10 +291,9 @@ def derive_topic_from_title(title: str, max_words: int = 4) -> str:
 
 
 def normalize_topic_label(raw_topic: str, candidate: dict, confidence_score: float) -> str:
+    
     topic = re.sub(r"\s+", " ", (raw_topic or "")).strip(" .,-")
     broad_topic = str(candidate.get("broad_topic", "")).strip()
-
-    title_based_topic = derive_topic_from_title(candidate.get("title", ""))
     fallback_topic = infer_topic_fallback(
         candidate.get("title", ""),
         candidate.get("excerpt", ""),
@@ -198,23 +304,28 @@ def normalize_topic_label(raw_topic: str, candidate: dict, confidence_score: flo
         return fallback_topic
 
     topic_lower = topic.lower()
-    broad_lower = broad_topic.lower()
-    one_word_topic = len(topic.split()) <= 1
 
+    # If it's a vague label, use keyword fallback
     if topic_lower in VAGUE_TOPIC_LABELS:
         return fallback_topic
 
-    if one_word_topic and topic_lower in {
-        "politics", "economy", "technology", "science", "health", "education", "sports",
-        "tech", "sport", "business", "world", "climate", "crypto", "travel", "gaming", "ai",
-    }:
-        return title_based_topic or fallback_topic
+    # If it's a known clean topic label, trust it and canonicalize
+    KNOWN_LOWER = {t.lower(): t for t in KNOWN_TOPICS}
+    if topic_lower in KNOWN_LOWER:
+        return KNOWN_LOWER[topic_lower]
 
-    if broad_lower and topic_lower == broad_lower:
-        return title_based_topic or fallback_topic
+    # Check TOPIC_SYNONYMS for a canonical mapping
+    canonical = canonicalize_topic_label(topic)
+    if canonical and canonical != topic:
+        return canonical
 
-    if confidence_score < 0.40 and title_based_topic:
-        return title_based_topic
+    # If the LLM returned the broad_topic back (correct for custom topics)
+    if broad_topic and topic_lower == broad_topic.lower():
+        return broad_topic
+
+    # Low confidence and topic seems invented — fall back to keywords
+    if confidence_score < 0.40:
+        return fallback_topic
 
     return topic
 
@@ -276,45 +387,291 @@ def infer_sentiment_fallback(title: str, excerpt: str) -> str:
 
 
 def infer_topic_fallback(title: str, excerpt: str = "", broad_topic: str = "") -> str:
+    """Classify topic using multilingual keyword substring scoring.
+    Uses substring matching so Arabic prefixed words match correctly.
+    e.g. "والرياضة" matches keyword "رياض" because it contains it.
+    Always returns a clean topic label — never raw title words.
+    """
     text = f"{title} {excerpt}".lower()
 
     topic_keywords = {
         "Politics": [
-            "politic", "election", "government", "minister", "parliament", "president", "diploma",
-            "policy", "white house", "sanction", "trump", "biden", "iran", "gaza", "ukraine",
-            "politique", "gouvernement", "ministre", "parlement", "president", "negociation", "diplom",
-            "انتخابات", "حكومة", "وزير", "الرئيس", "برلمان", "مفاوضات", "دبلوماس", "سياس", "إيران", "غزة", "أوكرانيا",
+            "politic", "election", "government", "minister", "parliament", "president",
+            "policy", "white house", "sanction", "vote", "senator", "congress", "senate",
+            "diplomat", "treaty", "prime minister", "ruling",
+            "politique", "gouvernement", "ministre", "parlement", "scrutin", "candidat",
+            "انتخاب", "حكوم", "وزير", "رئيس", "برلمان", "تصويت", "مرشح", "نائب",
+            "سياس", "حزب", "مجلس", "قرار", "دبلوماس", "معاهد",
+        ],
+        "Elections": [
+            "election", "ballot", "polling", "referendum", "campaign", "voter",
+            "electoral", "recount", "candidacy",
+            "scrutin", "référendum",
+            "انتخاب", "اقتراع", "استفتاء",
         ],
         "Economy": [
-            "econom", "inflation", "market", "stock", "gdp", "trade", "tariff", "oil", "bank", "crypto", "finance",
-            "economie", "inflation", "marche", "bourse", "banque", "financ",
-            "اقتصاد", "تضخم", "بورصة", "أسهم", "سوق", "نفط", "بنك", "دولار", "عملة", "استثمار", "تعرفة",
+            "econom", "inflation", "gdp", "trade", "tariff", "recession",
+            "dollar", "euro", "currency", "fiscal", "monetary", "deficit",
+            "economie", "bourse", "banque", "marché",
+            "اقتصاد", "تضخم", "نفط", "بنك", "دولار", "تجار", "سوق", "ميزانية",
+            "عجز", "عملة", "أسعار",
         ],
-        "Technology": [
-            "tech", "ai", "artificial intelligence", "software", "app", "chip", "startup", "google", "microsoft", "apple",
-            "technologie", "numerique", "logiciel", "intelligence artificielle", "startup",
-            "تقنية", "تكنولوجيا", "ذكاء اصطناعي", "الذكاء الاصطناعي", "برمج", "تطبيق", "شريحة", "روبوت", "هاتف",
+        "Business": [
+            "business", "company", "ceo", "merger", "acquisition",
+            "earnings", "ipo", "corporate", "revenue", "profit",
+            "entreprise", "pdg", "fusion", "benefice",
+            "شرك", "رئيس تنفيذي", "اندماج", "أرباح", "إيرادات", "أعمال",
+        ],
+        "Finance": [
+            "finance", "loan", "mortgage", "interest rate", "federal reserve",
+            "bond", "debt", "credit", "imf",
+            "financi", "taux intérêt", "dette",
+            "تمويل", "قرض", "فائدة", "ديون",
+        ],
+        "Stock Market": [
+            "stock market", "nasdaq", "dow jones", "shares", "trading",
+            "market crash", "wall street", "ipo",
+            "بورصة", "أسهم", "تداول", "سوق المال",
+        ],
+        "Investing": [
+            "invest", "investor", "portfolio", "dividend", "fund", "etf",
+            "venture capital",
+            "investiss", "fonds",
+            "استثمار", "مستثمر", "صندوق",
+        ],
+        "Tech": [
+            "tech", "software", "app", "chip", "google", "microsoft", "apple",
+            "smartphone", "internet", "cloud", "digital", "computer", "samsung",
+            "semiconductor", "silicon",
+            "technolog", "logiciel", "numérique",
+            "تقني", "تكنولوج", "برمجي", "تطبيق", "هاتف", "إنترنت", "حاسوب", "رقمي",
+        ],
+        "AI": [
+            "artificial intelligence", "machine learning", "deep learning",
+            "neural network", "chatgpt", "openai", "llm", "generative", "gpt",
+            "claude", "gemini", "large language",
+            "intelligence artificielle",
+            "ذكاء اصطناعي", "تعلم الآلة", "نموذج لغوي",
+        ],
+        "Cybersecurity": [
+            "cybersecurity", "hacker", "hacking", "breach", "malware", "ransomware",
+            "phishing", "data leak", "cyber attack", "encryption",
+            "piratage", "fuite de données",
+            "أمن سيبراني", "قرصن", "اختراق", "هجوم إلكتروني",
         ],
         "Science": [
-            "science", "research", "study", "experiment", "space", "nasa", "physics", "chemistry", "biology", "climate",
-            "recherche", "etude", "espace", "climat",
-            "علم", "بحث", "دراسة", "تجربة", "فضاء", "مناخ", "فيزياء", "كيمياء", "أحياء",
+            "science", "research", "study", "experiment", "physics", "chemistry",
+            "biology", "discovery", "scientist", "lab", "breakthrough", "dna",
+            "recherche", "découverte", "scientifique",
+            "علم", "بحث", "دراس", "اكتشاف", "فيزياء", "كيمياء", "أحياء", "مختبر",
+        ],
+        "Space": [
+            "space", "nasa", "rocket", "satellite", "moon", "mars", "galaxy",
+            "astronaut", "spacex", "telescope", "orbit",
+            "fusée", "astronaute",
+            "فضاء", "صاروخ", "قمر", "مريخ", "مجرة", "رائد فضاء",
         ],
         "Health": [
-            "health", "hospital", "vaccine", "disease", "virus", "medical", "doctor", "drug", "cancer", "who",
-            "sante", "hopital", "vaccin", "maladie", "medecin", "cancer",
-            "صحة", "مستشفى", "لقاح", "مرض", "فيروس", "طبي", "دواء", "سرطان", "طبيب",
+            "health", "hospital", "vaccine", "disease", "virus", "doctor", "drug",
+            "cancer", "pandemic", "treatment", "patient", "surgery", "medicine",
+            "santé", "hôpital", "vaccin", "maladie", "médecin",
+            "صح", "مستشفى", "لقاح", "مرض", "فيروس", "طبي", "طبيب", "علاج",
+            "سرطان", "وباء", "دواء", "جراح",
+        ],
+        "Mental Health": [
+            "mental health", "depression", "anxiety", "therapy", "psychiatry",
+            "burnout", "psycholog", "counseling",
+            "santé mentale", "anxiété",
+            "صحة نفسية", "اكتئاب", "قلق", "علاج نفسي",
+        ],
+        "Fitness": [
+            "fitness", "workout", "gym", "exercise", "weight loss", "marathon", "yoga",
+            "entrainement", "régime",
+            "لياقة", "تمرين", "رياضة بدنية",
         ],
         "Education": [
-            "school", "student", "teacher", "university", "education", "curriculum", "exam", "campus", "classroom",
-            "ecole", "etudiant", "enseignant", "universite", "education", "examen",
-            "تعليم", "مدرسة", "طالب", "طلاب", "جامعة", "مناهج", "امتحان", "معلم", "وزارة التعليم",
+            "school", "student", "teacher", "university", "education", "exam",
+            "scholarship", "curriculum", "classroom",
+            "école", "étudiant", "université", "examen",
+            "تعليم", "مدرس", "طالب", "جامع", "امتحان", "معلم", "دراس",
         ],
-        "Sports": [
-            "sport", "match", "league", "cup", "goal", "team", "coach", "fifa", "uefa", "champions",
-            "football", "basketball", "tennis",
-            "sport", "match", "ligue", "coupe", "equipe", "entraineur", "but",
-            "رياض", "مباراة", "الدوري", "كأس", "هدف", "فريق", "مدرب", "كرة", "بطولة",
+        "Sport": [
+            "sport", "match", "league", "cup", "team", "coach", "tournament",
+            "olymp", "medal", "athlete", "championship", "stadium",
+            "équipe", "entraîneur", "coupe", "ligue",
+            "رياض", "مباراة", "دوري", "كأس", "فريق", "مدرب", "بطول", "لاعب", "ملعب",
+        ],
+        "Football": [
+            "football", "soccer", "premier league", "la liga", "champions league",
+            "world cup", "fifa", "goal", "penalty", "transfer", "messi", "ronaldo",
+            "كرة القدم", "الدوري", "هدف", "برشلون", "ريال مدريد", "ركلة جزاء",
+        ],
+        "Basketball": [
+            "basketball", "nba", "dunk", "rebound", "lebron", "curry", "playoffs",
+            "كرة السلة",
+        ],
+        "Tennis": [
+            "tennis", "wimbledon", "us open", "grand slam", "djokovic", "nadal",
+            "تنس", "ويمبلدون",
+        ],
+        "Formula 1": [
+            "formula 1", "formula one", "f1", "grand prix", "ferrari", "red bull",
+            "verstappen", "hamilton",
+            "فورمولا 1", "سباق السيارات",
+        ],
+        "Entertainment": [
+            "entertainment", "celebrity", "oscar", "grammy", "movie", "film",
+            "streaming", "netflix", "disney", "actor", "actress", "singer",
+            "divertissement", "célébrité", "série",
+            "ترفيه", "مشاهير", "جوائز", "فيلم", "مسلسل", "نجوم",
+        ],
+        "Cinema": [
+            "cinema", "movie", "film", "director", "box office",
+            "oscar", "cannes", "trailer",
+            "cinéma", "réalisateur",
+            "سينما", "فيلم", "مخرج", "أوسكار",
+        ],
+        "Music": [
+            "music", "song", "album", "concert", "grammy", "singer", "band",
+            "rap", "pop", "spotify",
+            "musique", "chanson", "concert",
+            "موسيقى", "أغني", "ألبوم", "حفل",
+        ],
+        "Gaming": [
+            "gaming", "game", "video game", "playstation", "xbox", "nintendo",
+            "esport", "twitch", "steam", "console",
+            "jeu vidéo",
+            "ألعاب", "بلايستيشن", "اكسبوكس",
+        ],
+        "World": [
+            "world", "global", "international", "united nations", "nato", "g7",
+            "g20", "summit", "refugee", "humanitarian",
+            "mondial", "onu",
+            "عالم", "دولي", "أمم متحدة", "قمة", "ناتو",
+        ],
+        "Geopolitics": [
+            "geopolit", "superpower", "alliance", "rivalry", "brics", "sanctions", "embargo",
+            "جيوسياس", "نفوذ", "تحالف", "عقوبات",
+        ],
+        "Diplomacy": [
+            "diplomacy", "diplomat", "ambassador", "treaty", "bilateral", "negotiation",
+            "diplomatie", "ambassadeur",
+            "دبلوماس", "سفير", "معاهد", "مفاوض",
+        ],
+        "Military": [
+            "military", "army", "soldier", "war", "weapon", "missile",
+            "airstrike", "troops", "defense", "navy", "combat",
+            "armée", "soldat", "guerre",
+            "عسكري", "جيش", "جندي", "حرب", "سلاح", "صاروخ", "غار", "قوات", "معرك",
+        ],
+        "Terrorism": [
+            "terror", "terrorist", "extremist", "bomb", "hostage", "isis",
+            "terrorisme", "attentat",
+            "إرهاب", "إرهابي", "تفجير", "متطرف",
+        ],
+        "Crime": [
+            "crime", "criminal", "police", "arrest", "murder", "robbery",
+            "drug", "trafficking", "gang", "prison",
+            "policier", "arrestation", "meurtre",
+            "جريمة", "شرط", "اعتقال", "قتل", "مخدرات", "سجن",
+        ],
+        "Corruption": [
+            "corruption", "bribe", "embezzlement", "scandal", "fraud", "laundering",
+            "scandale", "fraude",
+            "فساد", "رشوة", "اختلاس", "فضيحة",
+        ],
+        "Law": [
+            "law", "court", "judge", "lawsuit", "verdict", "legislation", "lawyer",
+            "tribunal", "juge", "avocat",
+            "قانون", "محكم", "قاض", "حكم", "دعوى", "محامي",
+        ],
+        "Human Rights": [
+            "human rights", "freedoms", "amnesty", "oppression", "discrimination",
+            "droits humains", "liberté",
+            "حقوق الإنسان", "حريات", "تمييز", "اضطهاد",
+        ],
+        "Immigration": [
+            "immigr", "migrant", "refugee", "asylum", "border", "deportation",
+            "réfugié", "frontière",
+            "هجر", "مهاجر", "لاجئ", "حدود", "ترحيل",
+        ],
+        "Climate": [
+            "climate", "global warming", "greenhouse", "carbon", "emission",
+            "drought", "flood", "wildfire",
+            "climat", "réchauffement", "carbone",
+            "مناخ", "احترار", "كربون", "انبعاث", "فيضان", "جفاف",
+        ],
+        "Environment": [
+            "environment", "pollution", "deforestation", "biodiversity", "recycling",
+            "environnement", "pollution",
+            "بيئة", "تلوث", "غابات", "إعادة تدوير",
+        ],
+        "Energy": [
+            "energy", "oil", "gas", "solar", "wind", "nuclear", "power plant", "opec",
+            "énergie", "pétrole", "solaire", "nucléaire",
+            "طاقة", "نفط", "غاز", "شمسي", "نووي", "كهرباء",
+        ],
+        "Crypto": [
+            "crypto", "bitcoin", "ethereum", "blockchain", "token", "nft", "binance",
+            "عملة رقمية", "بيتكوين", "بلوكتشين",
+        ],
+        "Travel": [
+            "travel", "tourism", "destination", "flight", "hotel", "airport",
+            "voyage", "tourisme", "hôtel",
+            "سفر", "سياح", "رحل", "فندق", "طيران",
+        ],
+        "Food": [
+            "food", "restaurant", "recipe", "cuisine", "chef", "diet", "nutrition",
+            "nourriture", "recette",
+            "طعام", "مطعم", "وصفة", "مطبخ",
+        ],
+        "Fashion": [
+            "fashion", "style", "designer", "luxury", "brand", "runway", "clothing",
+            "mode", "luxe",
+            "موضة", "أزياء", "مصمم",
+        ],
+        "Real Estate": [
+            "real estate", "property", "housing", "mortgage", "rent", "apartment",
+            "immobilier", "logement",
+            "عقارات", "مسكن", "إيجار", "بناء",
+        ],
+        "Agriculture": [
+            "agriculture", "farming", "crop", "harvest", "food security",
+            "ferme", "récolte",
+            "زراع", "محاصيل", "حصاد",
+        ],
+        "Robotics": [
+            "robot", "robotics", "automation", "drone", "autonomous", "humanoid",
+            "automatisation",
+            "روبوت", "أتمت", "طائرة مسيرة",
+        ],
+        "Biotechnology": [
+            "biotech", "biotechnology", "gene", "crispr", "mrna", "clinical trial",
+            "biotechnologie",
+            "تكنولوجيا حيوية", "جينات",
+        ],
+        "Quantum": [
+            "quantum", "qubit", "quantum computing",
+            "حوسبة كمية",
+        ],
+        "Protests": [
+            "protest", "demonstration", "rally", "march", "uprising", "riot", "strike",
+            "manifestation", "grève",
+            "احتجاج", "مظاهر", "إضراب",
+        ],
+        "Natural Disasters": [
+            "earthquake", "flood", "hurricane", "tornado", "wildfire", "tsunami",
+            "séisme", "inondation", "ouragan", "catastrophe",
+            "زلزال", "فيضان", "إعصار", "حرائق", "كارثة",
+        ],
+        "Culture": [
+            "culture", "heritage", "tradition", "festival", "museum", "archaeology",
+            "patrimoine", "musée",
+            "ثقاف", "تراث", "مهرجان", "متحف",
+        ],
+        "Startups": [
+            "startup", "startups", "venture capital", "seed funding", "founder", "unicorn",
+            "شركات ناشئة", "ريادة أعمال",
         ],
     }
 
@@ -326,13 +683,42 @@ def infer_topic_fallback(title: str, excerpt: str = "", broad_topic: str = "") -
             best_score = score
             best_topic = topic_label
 
+    # Return the clean matched category label directly.
+    # NEVER call derive_topic_from_title() here — that returns raw title
+    # words like "Algeria France match", not a clean category label.
     if best_topic and best_score > 0:
-        return derive_topic_from_title(title) or best_topic
+        return best_topic
 
-    if broad_topic:
+    # No keyword matched. Use the feed's broad_topic as-is.
+    if broad_topic and broad_topic not in ("", "General News"):
         return broad_topic
 
-    return derive_topic_from_title(title) or "Untitled Topic"
+    return "General News"
+
+
+def canonicalize_topic_label(label: str) -> str:
+    """Map a raw topic string to a canonical known topic label.
+    Checks KNOWN_TOPICS first (case-insensitive), then TOPIC_SYNONYMS.
+    """
+    if not label:
+        return ""
+    stripped = label.strip()
+    lower = stripped.lower()
+
+    # Direct case-insensitive match against KNOWN_TOPICS
+    for known in KNOWN_TOPICS:
+        if known.lower() == lower:
+            return known
+
+    # Strip punctuation and check TOPIC_SYNONYMS
+    cleaned = re.sub(r"[^\w\s\u0600-\u06FF]", " ", lower).strip()
+    if cleaned in TOPIC_SYNONYMS:
+        return TOPIC_SYNONYMS[cleaned]
+    for k, v in TOPIC_SYNONYMS.items():
+        if k in cleaned:
+            return v
+
+    return stripped
 
 
 def normalize_evidence_keywords(raw_keywords, candidate: dict) -> list[str]:
@@ -393,6 +779,7 @@ def build_article_candidate(entry: dict, broad_topic: str) -> dict | None:
         "url": url,
         "excerpt": excerpt,
         "published_at": published_at,
+        "fetched_at": datetime.utcnow().isoformat(),
         "broad_topic": broad_topic,
         "source_host": source_host,
         "language": detect_language(f"{title} {excerpt}"),
@@ -458,21 +845,51 @@ def normalize_analysis(raw_analysis: dict, candidate: dict, fallback_used: bool)
 
 
 def analyze_with_ollama(candidate: dict) -> dict:
-    prompt = (
-        "You are a multilingual news classifier.\n"
-        "Classify the article's sentiment and one specific topic from the meaning of the text.\n"
-        "Keep it simple and fast. Do not overthink.\n"
-        "Return all text fields in English.\n"
-        "Use the main entity/event in the title as the topic anchor when possible.\n"
-        "Use a concise topic label, not vague labels like General News, Other, or News.\n"
-        "Give short reasons and a few evidence keywords.\n\n"
-        "Return ONLY valid JSON with exactly these keys:\n"
-        "{\"sentiment\":\"Positive|Negative|Neutral\",\"confidence_score\":0.0,\"topic\":\"Specific Topic\",\"reasoning_summary\":\"General classification summary under 25 words\",\"sentiment_reason\":\"Why sentiment is this label under 20 words\",\"topic_reason\":\"Why this topic label fits under 20 words\",\"evidence_keywords\":[\"keyword1\",\"keyword2\"]}\n\n"
-        f"User broad topic: {candidate['broad_topic']}\n"
-        f"Detected article language: {candidate['language']}\n"
-        f"Title: {candidate['title']}\n"
-        f"Text: {candidate['excerpt']}\n"
+    lang = candidate.get("language", "English")
+    title = candidate.get("title", "")
+    excerpt = candidate.get("excerpt", "")[:300]
+    broad = candidate.get("broad_topic", "")
+
+    if lang == "Arabic":
+        lang_note = "المقال بالعربية. افهم المحتوى بالعربية لكن أجب بالإنجليزية فقط."
+    elif lang == "French":
+        lang_note = "L'article est en français. Réponds en anglais uniquement."
+    else:
+        lang_note = "The article is in English."
+
+    known_topics = (
+        "AI, Tech, Politics, Sport, Economy, Science, Health, Business, "
+        "Entertainment, World, Climate, Crypto, Education, Travel, Gaming, "
+        "Cybersecurity, Space, Finance, Football, Basketball, Tennis, "
+        "Formula 1, Military, Elections, Law, Immigration, Human Rights, "
+        "Environment, Energy, Music, Cinema, Fashion, Food, Geopolitics, "
+        "Diplomacy, Corruption, Crime, Terrorism, Mental Health, Startups, "
+        "Protests, Natural Disasters, Culture, Robotics, Biotechnology"
     )
+
+    prompt = f"""{lang_note}
+You are a news article classifier.
+
+TASK: Classify the sentiment and topic of this article.
+
+RULES:
+- "sentiment" MUST be exactly one of: Positive, Negative, Neutral
+- "topic" MUST be the most accurate label for this article.
+  First try to match from this list: {known_topics}
+  If the article is about "{broad}", return "{broad}" exactly.
+  If none fit, use a specific 1-3 word label in English.
+  NEVER return: General, News, Other, Update, Breaking, Latest.
+- "confidence_score" is a float 0.0 to 1.0
+- "sentiment_reason" under 10 words in English
+- "topic_reason" under 10 words in English
+- "evidence_keywords" list of 2 to 4 key words in English
+- Output ONLY valid JSON. No markdown. No explanation.
+
+Title: {title}
+Text: {excerpt}
+
+OUTPUT:
+{{"sentiment":"Positive|Negative|Neutral","confidence_score":0.85,"topic":"{broad}","sentiment_reason":"reason","topic_reason":"reason","evidence_keywords":["kw1","kw2"]}}"""
     def build_fallback(reason: str) -> dict:
         fallback = {
             "sentiment": infer_sentiment_fallback(candidate["title"], candidate["excerpt"]),
@@ -488,20 +905,23 @@ def analyze_with_ollama(candidate: dict) -> dict:
     last_error = None
     for attempt in range(1, OLLAMA_RETRIES + 2):
         try:
-            response = requests.post(
-                f"{OLLAMA_URL}/api/generate",
-                json={
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "stream": False,
-                    "format": "json",
-                    "options": {
-                        "temperature": 0.1,
-                        "top_p": 0.9,
+            with _ollama_semaphore:
+                response = requests.post(
+                    f"{OLLAMA_URL}/api/generate",
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "stream": False,
+                        "format": "json",
+                        "options": {
+                            "temperature": 0.05,
+                            "top_p": 0.85,
+                            "num_ctx": 1024,
+                            "num_predict": 120,
+                        },
                     },
-                },
-                timeout=OLLAMA_TIMEOUT,
-            )
+                    timeout=OLLAMA_TIMEOUT,
+                )
             response.raise_for_status()
             result = response.json()
             response_text = result.get("response", "")
@@ -622,7 +1042,35 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
 
         existing_urls = get_existing_urls([candidate["url"] for candidate in candidates])
         fresh_candidates = [candidate for candidate in candidates if candidate["url"] not in existing_urls]
-        fresh_candidates = fresh_candidates[:desired_new_articles]
+
+        # Use keyword-based topic matching, which works for all languages
+        # including Arabic (uses substring matching on Arabic roots).
+        # This replaces the broken broad_topic.lower() in text approach
+        # which could never match Arabic text with an English topic name.
+        fresh_matching = []
+        fresh_others = []
+        for c in fresh_candidates:
+            inferred = infer_topic_fallback(
+                c.get("title", ""),
+                c.get("excerpt", ""),
+                broad_topic,
+            )
+            # Consider it a match if:
+            # - keyword classifier returned the same topic as the feed
+            # - OR keyword classifier returned a synonym/related topic
+            inferred_c = canonicalize_topic_label(inferred).lower()
+            broad_c = canonicalize_topic_label(broad_topic).lower()
+            if inferred_c == broad_c or inferred == broad_topic:
+                fresh_matching.append(c)
+            else:
+                fresh_others.append(c)
+
+        if fresh_matching:
+            fresh_candidates = fresh_matching[:desired_new_articles]
+        else:
+            # No on-topic articles found in this feed.
+            # Store a reduced set rather than nothing, but cap at half target.
+            fresh_candidates = fresh_others[:max(1, desired_new_articles // 2)]
 
         for candidate in fresh_candidates:
             try:
@@ -633,8 +1081,8 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
                 try:
                     conn_insert.execute("""
                         INSERT OR IGNORE INTO articles
-                        (feed_id, title, url, summary, sentiment, confidence_score, topic, language, inference_log, published_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        (feed_id, title, url, summary, sentiment, confidence_score, topic, language, inference_log, published_at, fetched_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
                         feed_id,
                         candidate["title"],
@@ -646,6 +1094,7 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
                         candidate["language"],
                         analysis["inference_log"],
                         candidate["published_at"],
+                        candidate["fetched_at"],
                     ))
                     conn_insert.commit()
 
@@ -786,20 +1235,60 @@ def run_pipeline_for_user_topic(user_id: int, topic: str):
         _release_user_pipeline_slot(user_id)
 
 
-def run_pipeline():
+def run_pipeline(priority_user_id: int = None):
+    """Global pipeline with priority support.
+
+    Processing order:
+    1. priority_user_id (if given — used for new registrations)
+    2. Currently logged-in user (set via set_logged_in_user())
+    3. All remaining users in background, sequentially
+
+    This ensures:
+    - A logging-in user sees articles immediately after their pipeline runs
+    - A newly registered user gets priority so they see articles on first load
+    - Background users get processed after, one at a time, no Ollama overload
+    """
     print(f"\n=== Global pipeline started at {datetime.utcnow()} UTC ===")
+
     conn = get_conn()
-    users = [dict(user) for user in conn.execute("SELECT id FROM users ORDER BY id").fetchall()]
+    all_users = [dict(u) for u in conn.execute(
+        "SELECT id FROM users ORDER BY id"
+    ).fetchall()]
     conn.close()
 
-    default_user_ids = [user["id"] for user in users]
-    ordered_user_ids = _get_global_user_order(default_user_ids)
+    all_user_ids = [u["id"] for u in all_users]
+    if not all_user_ids:
+        print("=== No users found, pipeline exiting ===")
+        return
 
-    print(f"Found {len(ordered_user_ids)} users to process")
-    if ordered_user_ids != default_user_ids:
-        print(f"Prioritized global order: {ordered_user_ids}")
+    # Build ordered list: priority_user first, then logged-in, then rest
+    ordered = []
+    seen = set()
 
-    for user_id in ordered_user_ids:
+    def add(uid):
+        if uid is not None and uid in all_user_ids and uid not in seen:
+            ordered.append(uid)
+            seen.add(uid)
+
+    # 1. Explicitly requested priority user (new registration)
+    add(priority_user_id)
+
+    # 2. Currently logged-in user
+    with _pipeline_state_lock:
+        add(_current_logged_in_user)
+
+    # 3. Priority queue (users who triggered manual refresh)
+    with _pipeline_state_lock:
+        for uid in list(_priority_user_ids):
+            add(uid)
+
+    # 4. Everyone else in default order
+    for uid in all_user_ids:
+        add(uid)
+
+    print(f"Processing {len(ordered)} users. Order: {ordered}")
+
+    for user_id in ordered:
         run_pipeline_for_user(user_id)
 
     print(f"=== Global pipeline complete at {datetime.utcnow()} UTC ===\n")

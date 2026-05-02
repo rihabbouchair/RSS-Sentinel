@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from database import get_conn
 from auth import hash_password, verify_password, create_access_token, get_current_user
 from feed_registry import get_feed_urls
-from pipeline import run_pipeline_for_user, prioritize_user_pipeline, copy_seed_articles_to_user
+from pipeline import run_pipeline_for_user, prioritize_user_pipeline, set_logged_in_user, copy_seed_articles_to_user
 from email_service import (
     generate_verification_code,
     hash_verification_code,
@@ -124,6 +124,7 @@ def register(request: RegisterRequest, background_tasks: BackgroundTasks):
         user = cursor.fetchone()
         conn.close()
 
+        set_logged_in_user(user_id)
         prioritize_user_pipeline(user_id)
         background_tasks.add_task(run_pipeline_for_user, user_id)
         token = create_access_token(user_id)
@@ -164,6 +165,7 @@ def login(request: LoginRequest, background_tasks: BackgroundTasks):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         token = create_access_token(user["id"])
+        set_logged_in_user(user["id"])
         prioritize_user_pipeline(user["id"])
         background_tasks.add_task(run_pipeline_for_user, user["id"])
 

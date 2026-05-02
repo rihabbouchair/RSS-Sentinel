@@ -59,23 +59,58 @@ AL_JAZEERA_ARABIC = {
     "Gaming":   "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
 }
 
-# BBC Arabic - confirmed working 25 entries
+# BBC Arabic - only topic-specific feeds that add value
 BBC_ARABIC = {
-    "AI":       "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
-    "Tech":     "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
-    "Politics": "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
-    "Sport":    "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
-    "Economy":  "https://feeds.bbci.co.uk/arabic/business/rss.xml",
-    "Science":  "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
-    "Health":   "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
-    "Business": "https://feeds.bbci.co.uk/arabic/business/rss.xml",
-    "Entertainment": "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
-    "World":    "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
-    "Climate":  "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
-    "Crypto":   "https://feeds.bbci.co.uk/arabic/business/rss.xml",
-    "Education": "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
-    "Travel":   "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
-    "Gaming":   "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    # Sport-specific feed — genuinely relevant
+    "Sport":         "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+    "Football":      "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+    "Basketball":    "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+    "Tennis":        "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+    "Formula 1":     "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+    "Fitness":       "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
+
+    # Business-specific feed — genuinely relevant
+    "Economy":       "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Business":      "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Finance":       "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Crypto":        "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Stock Market":  "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Investing":     "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Startups":      "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Energy":        "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+    "Real Estate":   "https://feeds.bbci.co.uk/arabic/business/rss.xml",
+
+    # Science and tech feed — genuinely relevant
+    "AI":            "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Tech":          "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Science":       "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Health":        "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Space":         "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Cybersecurity": "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Environment":   "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Robotics":      "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Biotechnology": "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Mental Health": "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Climate":       "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Gaming":        "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+    "Quantum":       "https://feeds.bbci.co.uk/arabic/scienceandtech/rss.xml",
+
+    # World service — only use for topics where world news is appropriate
+    "Politics":      "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "World":         "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Military":      "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Elections":     "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Geopolitics":   "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Diplomacy":     "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Terrorism":     "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Human Rights":  "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Immigration":   "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Protests":      "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+    "Natural Disasters": "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
+
+    # NOT included (no relevant BBC Arabic feed):
+    # Entertainment, Cinema, Music, Fashion, Food, Travel, Culture,
+    # Agriculture, Law, Corruption, Crime
 }
 
 # Algerian Arabic sources (WordPress RSS)
@@ -150,6 +185,7 @@ def get_feed_urls(topic: str, languages: list = None) -> list:
         languages = ['English']
     
     query = TOPIC_QUERIES.get(topic, topic)
+    query_ar = query
     feeds = []
     
     if 'English' in languages:
@@ -160,7 +196,25 @@ def get_feed_urls(topic: str, languages: list = None) -> list:
         feeds.append((ALGERIAN_FRENCH.get(topic, "https://www.tsa-algerie.com/feed/"), "French"))
     
     if 'Arabic' in languages:
-        feeds.append((BBC_ARABIC.get(topic, "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml"), "Arabic"))
+        # PRIMARY: Google News Arabic with Arabic topic query
+        # Searches the full Arabic web specifically for this topic
+        feeds.append((
+            f"https://news.google.com/rss/search?q={query_ar}&hl=ar&gl=DZ&ceid=DZ:ar",
+            "Arabic",
+        ))
+        # SUPPLEMENT: BBC Arabic — only added when it has a genuinely
+        # relevant feed for this topic (not worldservice for non-news topics)
+        bbc_url = BBC_ARABIC.get(topic)
+        if bbc_url:
+            # Only add worldservice for topics where world news is appropriate
+            worldservice_topics = {
+                "Politics", "World", "Military", "Elections", "Geopolitics",
+                "Diplomacy", "Terrorism", "Human Rights", "Immigration",
+                "Protests", "Natural Disasters",
+            }
+            if bbc_url != "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml" \
+               or topic in worldservice_topics:
+                feeds.append((bbc_url, "Arabic"))
         feeds.append((ALGERIAN_ARABIC.get(topic, "https://www.ennaharonline.com/feed/"), "Arabic"))
         feeds.append((ECHOUROUK_ARABIC.get(topic, "https://www.echorouk.dz/feed/"), "Arabic"))
         feeds.append((ARABIC_NEWS_SOURCES.get(topic, "https://feeds.alarabiya.net/newsfeed.xml"), "Arabic"))

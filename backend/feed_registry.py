@@ -23,6 +23,8 @@ TOPIC_QUERIES = {
     "تعليم": "education",
 }
 
+ALGERIAN_LOCAL_TOPICS = {"World", "Politics", "Economy", "Sport"}
+
 ECHOUROUK_ARABIC = {
     "AI":       "https://www.echorouk.dz/feed/",
     "Tech":     "https://www.echorouk.dz/feed/",
@@ -39,24 +41,6 @@ ECHOUROUK_ARABIC = {
     "Education": "https://www.echorouk.dz/feed/",
     "Travel":   "https://www.echorouk.dz/feed/",
     "Gaming":   "https://www.echorouk.dz/feed/",
-}
-
-AL_JAZEERA_ARABIC = {
-    "AI":       "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Tech":     "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Politics": "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Sport":    "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Economy":  "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Science":  "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Health":   "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Business": "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Entertainment": "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "World":    "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Climate":  "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Crypto":   "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Education": "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Travel":   "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
-    "Gaming":   "https://www.aljazeera.net/xml/feeds/aljazeera/articles.xml",
 }
 
 # BBC Arabic - only topic-specific feeds that add value
@@ -115,60 +99,34 @@ BBC_ARABIC = {
 
 # Algerian Arabic sources (WordPress RSS)
 ALGERIAN_ARABIC = {
-    "AI":       "https://www.ennaharonline.com/feed/",
-    "Tech":     "https://www.ennaharonline.com/feed/",
     "Politics": "https://www.ennaharonline.com/feed/",
     "Sport":    "https://sport.ennaharonline.com/feed/",
     "Economy":  "https://www.ennaharonline.com/feed/",
-    "Science":  "https://www.ennaharonline.com/feed/",
-    "Health":   "https://www.ennaharonline.com/feed/",
-    "Business": "https://www.ennaharonline.com/feed/",
-    "Entertainment": "https://www.ennaharonline.com/feed/",
     "World":    "https://www.ennaharonline.com/feed/",
-    "Climate":  "https://www.ennaharonline.com/feed/",
-    "Crypto":   "https://www.ennaharonline.com/feed/",
-    "Education": "https://www.ennaharonline.com/feed/",
-    "Travel":   "https://www.ennaharonline.com/feed/",
-    "Gaming":   "https://www.ennaharonline.com/feed/",
 }
 
 # Additional Arabic sources (working RSS feeds)
+# These are only used for broad Arabic topics, not narrow subjects like AI or Crypto.
 ARABIC_NEWS_SOURCES = {
-    "AI":       "https://feeds.alarabiya.net/newsfeed.xml",
-    "Tech":     "https://feeds.alarabiya.net/newsfeed.xml",
     "Politics": "https://feeds.alarabiya.net/newsfeed.xml",
     "Sport":    "https://feeds.alarabiya.net/newsfeed.xml",
     "Economy":  "https://feeds.alarabiya.net/newsfeed.xml",
-    "Science":  "https://feeds.alarabiya.net/newsfeed.xml",
-    "Health":   "https://feeds.alarabiya.net/newsfeed.xml",
-    "Business": "https://feeds.alarabiya.net/newsfeed.xml",
-    "Entertainment": "https://feeds.alarabiya.net/newsfeed.xml",
     "World":    "https://feeds.alarabiya.net/newsfeed.xml",
-    "Climate":  "https://feeds.alarabiya.net/newsfeed.xml",
-    "Crypto":   "https://feeds.alarabiya.net/newsfeed.xml",
-    "Education": "https://feeds.alarabiya.net/newsfeed.xml",
-    "Travel":   "https://feeds.alarabiya.net/newsfeed.xml",
-    "Gaming":   "https://feeds.alarabiya.net/newsfeed.xml",
 }
 
 # Algerian French sources
 ALGERIAN_FRENCH = {
-    "AI":       "https://www.tsa-algerie.com/feed/",
-    "Tech":     "https://www.tsa-algerie.com/feed/",
     "Politics": "https://www.tsa-algerie.com/feed/",
     "Sport":    "https://www.tsa-algerie.com/feed/",
     "Economy":  "https://www.tsa-algerie.com/feed/",
-    "Science":  "https://www.tsa-algerie.com/feed/",
-    "Health":   "https://www.tsa-algerie.com/feed/",
-    "Business": "https://www.tsa-algerie.com/feed/",
-    "Entertainment": "https://www.tsa-algerie.com/feed/",
     "World":    "https://www.tsa-algerie.com/feed/",
-    "Climate":  "https://www.tsa-algerie.com/feed/",
-    "Crypto":   "https://www.tsa-algerie.com/feed/",
-    "Education": "https://www.tsa-algerie.com/feed/",
-    "Travel":   "https://www.tsa-algerie.com/feed/",
-    "Gaming":   "https://www.tsa-algerie.com/feed/",
 }
+
+
+def _append_topic_feed(feeds: list, mapping: dict, topic: str, language: str, default_url: str, allowed_topics: set[str] | None = None):
+    if allowed_topics is not None and topic not in allowed_topics:
+        return
+    feeds.append((mapping.get(topic, default_url), language))
 
 def get_feed_urls(topic: str, languages: list = None) -> list:
     """Generate language-specific RSS feed URLs for a topic.
@@ -193,7 +151,14 @@ def get_feed_urls(topic: str, languages: list = None) -> list:
     
     if 'French' in languages:
         feeds.append((f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr", "French"))
-        feeds.append((ALGERIAN_FRENCH.get(topic, "https://www.tsa-algerie.com/feed/"), "French"))
+        _append_topic_feed(
+            feeds,
+            ALGERIAN_FRENCH,
+            topic,
+            "French",
+            "https://www.tsa-algerie.com/feed/",
+            ALGERIAN_LOCAL_TOPICS,
+        )
     
     if 'Arabic' in languages:
         # PRIMARY: Google News Arabic with Arabic topic query
@@ -215,8 +180,29 @@ def get_feed_urls(topic: str, languages: list = None) -> list:
             if bbc_url != "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml" \
                or topic in worldservice_topics:
                 feeds.append((bbc_url, "Arabic"))
-        feeds.append((ALGERIAN_ARABIC.get(topic, "https://www.ennaharonline.com/feed/"), "Arabic"))
-        feeds.append((ECHOUROUK_ARABIC.get(topic, "https://www.echorouk.dz/feed/"), "Arabic"))
-        feeds.append((ARABIC_NEWS_SOURCES.get(topic, "https://feeds.alarabiya.net/newsfeed.xml"), "Arabic"))
+        _append_topic_feed(
+            feeds,
+            ALGERIAN_ARABIC,
+            topic,
+            "Arabic",
+            "https://www.ennaharonline.com/feed/",
+            ALGERIAN_LOCAL_TOPICS,
+        )
+        _append_topic_feed(
+            feeds,
+            ECHOUROUK_ARABIC,
+            topic,
+            "Arabic",
+            "https://www.echorouk.dz/feed/",
+            ALGERIAN_LOCAL_TOPICS,
+        )
+        _append_topic_feed(
+            feeds,
+            ARABIC_NEWS_SOURCES,
+            topic,
+            "Arabic",
+            "https://feeds.alarabiya.net/newsfeed.xml",
+            ALGERIAN_LOCAL_TOPICS,
+        )
     
     return feeds

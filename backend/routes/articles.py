@@ -84,6 +84,8 @@ def get_articles(
 
         # Trigger async topic refresh (non-blocking)
         def run_topic_async():
+            from pipeline import prioritize_user_pipeline
+            prioritize_user_pipeline(current_user["id"])
             run_pipeline_for_user_topic(current_user["id"], feed_topic)
 
         thread = Thread(target=run_topic_async, daemon=True)
@@ -172,6 +174,8 @@ def refresh_articles(current_user: dict = Depends(get_current_user)):
 def refresh_topic(topic: str = Query(...), current_user: dict = Depends(get_current_user)):
     """Trigger an immediate pipeline run only for feeds matching `topic` for the current user."""
     def run_topic_async():
+        from pipeline import prioritize_user_pipeline
+        prioritize_user_pipeline(current_user["id"])
         run_pipeline_for_user_topic(current_user["id"], topic)
 
     thread = Thread(target=run_topic_async, daemon=True)

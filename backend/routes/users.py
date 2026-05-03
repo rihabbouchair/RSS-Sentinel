@@ -220,6 +220,9 @@ def update_preferences(
 
         conn.close()
 
+        # Prioritize this user to the front of the global pipeline
+        from pipeline import prioritize_user_pipeline
+        prioritize_user_pipeline(current_user["id"])
         background_tasks.add_task(run_pipeline_for_user, current_user["id"])
 
         return {

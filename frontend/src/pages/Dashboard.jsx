@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getArticles, refreshArticles, refreshTopic } from '../api';
+import { getArticles, refreshArticles, refreshTopic, markArticleRead, markArticleUnread, markAllArticlesRead } from '../api';
 import ArticleCard from '../components/ArticleCard';
 import FilterBar from '../components/FilterBar';
 import DailySummary from '../components/DailySummary';
@@ -8,13 +8,14 @@ export default function Dashboard({ selectedTopic }) {
   const [articles, setArticles] = useState([]);
   const [allArticles, setAllArticles] = useState([]);
   const [selectedSentiment, setSelectedSentiment] = useState(null);
+  const [showRead, setShowRead] = useState(true);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const articlesPerPage = 20;
 
-  useEffect(() => { loadArticles(); }, [selectedTopic, selectedSentiment]);
+  useEffect(() => { loadArticles(); }, [selectedTopic, selectedSentiment, showRead]);
 
   useEffect(() => {
     // Load all articles (no filter) for the summary
@@ -39,7 +40,13 @@ export default function Dashboard({ selectedTopic }) {
     if (!isAutoRefresh) setLoading(true);
     else setFetching(true);
     try {
-      const data = await getArticles({ feedTopic: selectedTopic, sentiment: selectedSentiment, limit: 100 });
+      let data = await getArticles({ feedTopic: selectedTopic, sentiment: selectedSentiment, limit: 100, showRead });
+      // Ensure numeric is_read and sort: unread first, then read; within each group sort by fetched_at desc
+      data = (data || []).map(a => ({ ...a, is_read: a.is_read ? 1 : 0 }));
+      data.sort((x, y) => {
+        if ((x.is_read || 0) !== (y.is_read || 0)) return (x.is_read || 0) - (y.is_read || 0);
+        return new Date(y.fetched_at || y.published_at) - new Date(x.fetched_at || x.published_at);
+      });
       setArticles(data);
 
       // If backend returned fallback articles (marked with is_fallback), trigger a topic refresh
@@ -49,7 +56,8 @@ export default function Dashboard({ selectedTopic }) {
       }
 
       // Keep summary source fresh even while filters are active.
-      const summaryData = await getArticles({ limit: 100 });
+      const summaryDataRaw = await getArticles({ limit: 100, showRead });
+      const summaryData = (summaryDataRaw || []).map(a => ({ ...a, is_read: a.is_read ? 1 : 0 }));
       setAllArticles(summaryData);
 
       if (!isAutoRefresh) setCurrentPage(1);
@@ -99,6 +107,44 @@ export default function Dashboard({ selectedTopic }) {
     } catch (error) {
       console.error('Failed to refresh pipeline:', error);
       setRefreshing(false);
+    }
+  }
+
+  async function handleMarkArticleRead(articleId) {
+    try {
+      const existing = articles.find(a => a.id === articleId) || allArticles.find(a => a.id === articleId);
+      if (existing && existing.is_read) {
+        // currently read -> mark unread
+        await markArticleUnread(articleId);
+      } else {
+        await markArticleRead(articleId);
+      }
+
+      // Update local lists and reorder
+      const updateAndSort = (list) => {
+        return (list || []).map(a => a.id === articleId ? { ...a, is_read: existing && existing.is_read ? 0 : 1 } : a)
+          .map(a => ({ ...a, is_read: a.is_read ? 1 : 0 }))
+          .sort((x, y) => {
+            if ((x.is_read || 0) !== (y.is_read || 0)) return (x.is_read || 0) - (y.is_read || 0);
+            return new Date(y.fetched_at || y.published_at) - new Date(x.fetched_at || x.published_at);
+          });
+      };
+
+      setArticles(prev => updateAndSort(prev));
+      setAllArticles(prev => updateAndSort(prev));
+    } catch (error) {
+      console.error('Failed to mark article as read/unread:', error);
+    }
+  }
+
+  async function handleMarkAllAsRead() {
+    try {
+      await markAllArticlesRead(selectedTopic || undefined);
+      // Reload articles to refresh
+      loadArticles();
+      loadAllArticles();
+    } catch (error) {
+      console.error('Failed to mark all as read:', error);
     }
   }
 
@@ -180,6 +226,52 @@ export default function Dashboard({ selectedTopic }) {
                 </div>
               )}
               <button
+                onClick={() => setShowRead(!showRead)}
+                title={showRead ? 'Hide read articles' : 'Show read articles'}
+                style={{
+                  padding: '6px 12px',
+                  background: showRead ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.08)',
+                  border: `0.5px solid ${showRead ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                  borderRadius: '6px',
+                  color: showRead ? '#4ade80' : 'var(--text-primary)',
+                  fontSize: '11px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = showRead ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = showRead ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.08)';
+                }}
+              >
+                {showRead ? '✓ All' : 'Unread'}
+              </button>
+              <button
+                onClick={handleMarkAllAsRead}
+                title="Mark all articles as read"
+                style={{
+                  padding: '6px 12px',
+                  background: 'rgba(255,255,255,0.08)',
+                  border: '0.5px solid var(--border)',
+                  borderRadius: '6px',
+                  color: 'var(--text-primary)',
+                  fontSize: '11px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = 'rgba(255,255,255,0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'rgba(255,255,255,0.08)';
+                }}
+              >
+                Mark all read
+              </button>
+              <button
                 onClick={handleRefreshPipeline}
                 disabled={refreshing}
                 style={{
@@ -218,7 +310,7 @@ export default function Dashboard({ selectedTopic }) {
           <>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {currentArticles.map((article) => (
-                <ArticleCard key={article.id} article={article} />
+                <ArticleCard key={article.id} article={article} onMarkRead={handleMarkArticleRead} />
               ))}
             </div>
 

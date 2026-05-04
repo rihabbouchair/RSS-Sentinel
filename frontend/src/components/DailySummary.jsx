@@ -24,7 +24,10 @@ export default function DailySummary({ articles }) {
     const neutral = todayArticles.filter((a) => a.sentiment === 'Neutral').length;
     const total = todayArticles.length;
     const overall = getOverallLabel(positive, negative, neutral);
-    const topFiveArticles = todayArticles.slice(0, 5);
+    const topFiveArticles = todayArticles.slice(0, 5).map(a => ({
+      ...a,
+      displaySummary: (a.summary || '').trim() || a.title || 'No summary available',
+    }));
 
     return { total, positive, negative, neutral, overall, topFiveArticles };
   }, [articles]);
@@ -54,8 +57,6 @@ export default function DailySummary({ articles }) {
   // Collapsed view - only show first article
   if (!expanded) {
     const firstArticle = data.topFiveArticles[0];
-    const sentimentColor = firstArticle.sentiment === 'Positive' ? '#4ade80' : firstArticle.sentiment === 'Negative' ? '#fb7185' : '#94a3b8';
-    
     return (
       <div
         style={{
@@ -82,7 +83,7 @@ export default function DailySummary({ articles }) {
         <div
           style={{
             padding: '10px 12px',
-            borderLeft: `3px solid ${sentimentColor}`,
+            borderLeft: `3px solid rgba(167,139,250,0.5)`,
             background: 'rgba(255,255,255,0.02)',
             borderRadius: '6px',
             fontSize: '11px',
@@ -91,12 +92,9 @@ export default function DailySummary({ articles }) {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-            <span style={{ color: sentimentColor, fontWeight: '600', flexShrink: 0 }}>
-              [{firstArticle.sentiment}]
-            </span>
-            <div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '3px' }}>
-                {firstArticle.title}
+            <div style={{ flex: 1 }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '6px' }}>
+                {firstArticle.displaySummary}
               </div>
               <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
                 {firstArticle.feed_topic || 'Unknown'}
@@ -149,13 +147,12 @@ export default function DailySummary({ articles }) {
 
       <div style={{ display: 'grid', gap: '8px' }}>
         {data.topFiveArticles.map((article, index) => {
-          const sentimentColor = article.sentiment === 'Positive' ? '#4ade80' : article.sentiment === 'Negative' ? '#fb7185' : '#94a3b8';
           return (
             <div
               key={article.id || index}
               style={{
                 padding: '10px 12px',
-                borderLeft: `3px solid ${sentimentColor}`,
+                borderLeft: `3px solid rgba(167,139,250,0.4)`,
                 background: 'rgba(255,255,255,0.02)',
                 borderRadius: '6px',
                 fontSize: '11px',
@@ -164,12 +161,9 @@ export default function DailySummary({ articles }) {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                <span style={{ color: sentimentColor, fontWeight: '600', flexShrink: 0 }}>
-                  [{article.sentiment}]
-                </span>
-                <div>
-                  <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '3px' }}>
-                    {article.title}
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: 'var(--text-primary)', fontWeight: '500', marginBottom: '6px' }}>
+                    {article.displaySummary}
                   </div>
                   <div style={{ color: 'var(--text-muted)', fontSize: '10px' }}>
                     {article.feed_topic || 'Unknown'}

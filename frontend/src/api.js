@@ -48,11 +48,12 @@ export async function getCurrentUser() {
   return parseJson(response, 'Failed to fetch user');
 }
 
-export async function getArticles({ feedTopic, sentiment, limit = 20 } = {}) {
+export async function getArticles({ feedTopic, sentiment, limit = 20, showRead = false } = {}) {
   const params = new URLSearchParams();
   if (feedTopic) params.append('feed_topic', feedTopic);
   if (sentiment) params.append('sentiment', sentiment);
   params.append('limit', limit);
+  params.append('show_read', showRead);
 
   const response = await fetch(`${API_BASE}/articles?${params.toString()}`, {
     headers: getAuthHeaders(),
@@ -123,4 +124,65 @@ export async function refreshTopic(topic) {
     headers: getAuthHeaders(),
   });
   return parseJson(response, 'Failed to refresh topic');
+}
+
+// ── Read/Unread Tracking ──────────────────────────────────────────────────────
+export async function markArticleRead(articleId) {
+  const response = await fetch(`${API_BASE}/articles/${articleId}/mark-read`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to mark article as read');
+}
+
+export async function markArticleUnread(articleId) {
+  const response = await fetch(`${API_BASE}/articles/${articleId}/mark-unread`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to mark article as unread');
+}
+
+export async function markAllArticlesRead(topic = null) {
+  const params = new URLSearchParams();
+  if (topic) params.append('topic', topic);
+  const response = await fetch(`${API_BASE}/articles/mark-all-read?${params.toString()}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to mark articles as read');
+}
+
+export async function getUnreadCounts() {
+  const response = await fetch(`${API_BASE}/articles/unread-counts`, {
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to fetch unread counts');
+}
+
+// ── Feed Discovery & Recommendations ───────────────────────────────────────────
+export async function discoverFeeds(topic = null, limit = 10) {
+  const params = new URLSearchParams();
+  if (topic) params.append('topic', topic);
+  params.append('limit', limit);
+  const response = await fetch(`${API_BASE}/feeds/discover?${params.toString()}`, {
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to fetch feeds');
+}
+
+export async function discoverFeedTopics() {
+  const response = await fetch(`${API_BASE}/feeds/discover/topics`, {
+    headers: getAuthHeaders(),
+  });
+  return parseJson(response, 'Failed to fetch topics');
+}
+
+export async function subscribeToFeed(feedId) {
+  const response = await fetch(`${API_BASE}/feeds/subscribe`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ feed_id: feedId }),
+  });
+  return parseJson(response, 'Failed to subscribe to feed');
 }

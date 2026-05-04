@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const sentimentConfig = {
   Positive: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)', bar: '#4ade80' },
@@ -119,7 +120,7 @@ function getDisplaySummary(article, inference) {
   return 'No short summary was available for this article.';
 }
 
-export default function ArticleCard({ article }) {
+export default function ArticleCard({ article, onMarkRead }) {
   const [showWhy, setShowWhy] = useState(false);
   const sentiment = article.sentiment || 'Neutral';
   const cfg = sentimentConfig[sentiment] || sentimentConfig.Neutral;
@@ -130,6 +131,114 @@ export default function ArticleCard({ article }) {
 
   const hasConfidence =
     article.confidence_score !== null && article.confidence_score !== undefined;
+
+  const whyModal = showWhy
+    ? createPortal(
+        <div
+          onClick={() => setShowWhy(false)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2,6,23,0.65)',
+            backdropFilter: 'blur(10px)',
+            WebkitBackdropFilter: 'blur(10px)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 'min(920px, 100%)',
+              maxHeight: 'min(84vh, 900px)',
+              borderRadius: '20px',
+              border: '1px solid rgba(167,139,250,0.28)',
+              background: 'var(--bg-surface)',
+              padding: '24px',
+              boxShadow: '0 40px 120px rgba(0,0,0,0.6)',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '14px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px', color: 'var(--text-primary)' }}>Why this classification?</h3>
+                <div style={{ marginTop: '4px', fontSize: '12px', color: 'var(--text-muted)' }}>{article.title}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWhy(false)}
+                style={{
+                  border: '0.5px solid var(--border)',
+                  background: 'transparent',
+                  color: 'var(--text-muted)',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  padding: '6px 10px',
+                  cursor: 'pointer',
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.6 }}>
+              {inference?.reasoning_summary || 'No model reasoning summary was stored for this article.'}
+            </div>
+
+            <div style={{ display: 'grid', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Sentiment reason: </span>
+                {inference?.sentiment_reason || 'No specific sentiment explanation was stored.'}
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Topic reason: </span>
+                {inference?.topic_reason || 'No specific topic explanation was stored.'}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: '999px', background: cfg.bg, color: cfg.color, border: `0.5px solid ${cfg.border}` }}>
+                Sentiment: {article.sentiment || inference?.sentiment || 'Unknown'}
+              </span>
+              <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)' }}>
+                Topic: {article.feed_topic || 'Unknown'}
+              </span>
+              <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', color: 'var(--text-secondary)', border: '0.5px solid var(--border)' }}>
+                Subtopic: {article.topic || inference?.topic || 'Unknown'}
+              </span>
+              {hasConfidence && (
+                <span style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: '999px', background: `${getConfidenceStyles(article.confidence_score).color}12`, color: getConfidenceStyles(article.confidence_score).color, border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30` }}>
+                  Confidence: {Math.round(article.confidence_score * 100)}%
+                </span>
+              )}
+            </div>
+
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
+              Signal words detected in the article text:
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {signalWords.length ? signalWords.map((word) => (
+                <span key={word} style={{ fontSize: '11px', fontFamily: 'DM Mono, monospace', padding: '4px 10px', borderRadius: '999px', background: 'rgba(167,139,250,0.14)', color: '#c4b5fd', border: '0.5px solid rgba(167,139,250,0.25)' }}>
+                  {word}
+                </span>
+              )) : (
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Not enough text to extract signal words.</span>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
+
+  const handleMarkRead = async () => {
+    if (onMarkRead) {
+      await onMarkRead(article.id);
+    }
+  };
 
   return (
     <div
@@ -143,6 +252,8 @@ export default function ArticleCard({ article }) {
         overflow: 'hidden',
         transition: 'border-color 0.2s, transform 0.15s',
         cursor: 'default',
+        opacity: article.is_read ? 0.62 : 1,
+        filter: article.is_read ? 'grayscale(0.2)' : 'none',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = 'rgba(255,255,255,0.15)';
@@ -218,30 +329,7 @@ export default function ArticleCard({ article }) {
             {sentiment}
           </span>
 
-          {hasConfidence && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '5px',
-                fontSize: '9px',
-                fontFamily: 'DM Mono, monospace',
-                color: getConfidenceStyles(article.confidence_score).color,
-                background: `${getConfidenceStyles(article.confidence_score).color}10`,
-                padding: '2px 8px',
-                borderRadius: '4px',
-                border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30`,
-                lineHeight: '1.2',
-              }}
-            >
-              <span style={{ fontWeight: '500' }}>
-                {Math.round(article.confidence_score * 100)}%
-              </span>
-              <span style={{ opacity: 0.8, fontSize: '8px', marginLeft: '2px' }}>
-                ({getConfidenceStyles(article.confidence_score).label})
-              </span>
-            </div>
-          )}
+          {/* confidence score intentionally not shown on card; kept in Why modal */}
         </div>
 
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px' }}>
@@ -252,8 +340,10 @@ export default function ArticleCard({ article }) {
           <p
             style={{
               fontSize: '12px',
-              color: 'var(--text-secondary)',
+        transition: 'border-color 0.2s, transform 0.15s, opacity 0.2s',
               lineHeight: '1.6',
+        opacity: article.is_read ? 0.62 : 1,
+        filter: article.is_read ? 'grayscale(0.2)' : 'none',
               marginBottom: '12px',
               display: '-webkit-box',
               WebkitLineClamp: 2,
@@ -298,6 +388,38 @@ export default function ArticleCard({ article }) {
             Why?
           </button>
 
+          <button
+            type="button"
+            onClick={handleMarkRead}
+            title={article.is_read ? 'Mark as unread' : 'Mark as read'}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontSize: '10px',
+              fontFamily: 'DM Mono, monospace',
+              padding: '6px 8px',
+              borderRadius: '6px',
+              background: article.is_read ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.08)',
+              color: article.is_read ? 'var(--text-muted)' : 'var(--text-primary)',
+              border: `0.5px solid ${article.is_read ? 'rgba(255,255,255,0.04)' : 'var(--border)'}`,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = article.is_read ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.12)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = article.is_read ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.08)';
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ opacity: 0.9 }}>
+              <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            {article.is_read ? 'Read' : 'Mark Read'}
+          </button>
+
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginLeft: 'auto' }}>
             {formatDate(article.fetched_at || article.published_at)}
           </span>
@@ -327,159 +449,7 @@ export default function ArticleCard({ article }) {
         </div>
       </div>
 
-      {showWhy && (
-        <div
-          onClick={() => setShowWhy(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(2,6,23,0.55)',
-            backdropFilter: 'blur(8px)',
-            WebkitBackdropFilter: 'blur(8px)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'center',
-            padding: '24px 16px',
-            overflowY: 'auto',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              width: '100%',
-              maxWidth: '760px',
-              maxHeight: 'calc(100vh - 48px)',
-              borderRadius: '16px',
-              border: '1px solid rgba(167,139,250,0.25)',
-              background: 'var(--bg-surface)',
-              padding: '20px',
-              boxShadow: '0 40px 100px rgba(0,0,0,0.5)',
-              overflowY: 'auto',
-              margin: '8px 0',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <h3 style={{ margin: 0, fontSize: '14px', color: 'var(--text-primary)' }}>Why this classification?</h3>
-              <button
-                type="button"
-                onClick={() => setShowWhy(false)}
-                style={{
-                  border: '0.5px solid var(--border)',
-                  background: 'transparent',
-                  color: 'var(--text-muted)',
-                  borderRadius: '6px',
-                  fontSize: '11px',
-                  padding: '3px 8px',
-                  cursor: 'pointer',
-                }}
-              >
-                Close
-              </button>
-            </div>
-
-            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '10px', lineHeight: 1.5 }}>
-              {inference?.reasoning_summary || 'No model reasoning summary was stored for this article.'}
-            </div>
-
-            <div style={{ display: 'grid', gap: '8px', marginBottom: '12px' }}>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Sentiment reason: </span>
-                {inference?.sentiment_reason || 'No specific sentiment explanation was stored.'}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Topic reason: </span>
-                {inference?.topic_reason || 'No specific topic explanation was stored.'}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontFamily: 'DM Mono, monospace',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: cfg.bg,
-                  color: cfg.color,
-                  border: `0.5px solid ${cfg.border}`,
-                }}
-              >
-                Sentiment: {article.sentiment || inference?.sentiment || 'Unknown'}
-              </span>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontFamily: 'DM Mono, monospace',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.08)',
-                  color: 'var(--text-secondary)',
-                  border: '0.5px solid var(--border)',
-                }}
-              >
-                Topic: {article.feed_topic || 'Unknown'}
-              </span>
-              <span
-                style={{
-                  fontSize: '10px',
-                  fontFamily: 'DM Mono, monospace',
-                  padding: '3px 8px',
-                  borderRadius: '6px',
-                  background: 'rgba(255,255,255,0.08)',
-                  color: 'var(--text-secondary)',
-                  border: '0.5px solid var(--border)',
-                }}
-              >
-                Subtopic: {article.topic || inference?.topic || 'Unknown'}
-              </span>
-              {hasConfidence && (
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontFamily: 'DM Mono, monospace',
-                    padding: '3px 8px',
-                    borderRadius: '6px',
-                    background: `${getConfidenceStyles(article.confidence_score).color}12`,
-                    color: getConfidenceStyles(article.confidence_score).color,
-                    border: `0.5px solid ${getConfidenceStyles(article.confidence_score).color}30`,
-                  }}
-                >
-                  Confidence: {Math.round(article.confidence_score * 100)}%
-                </span>
-              )}
-            </div>
-
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '6px' }}>
-              Signal words detected in the article text:
-            </div>
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              {signalWords.length ? (
-                signalWords.map((word) => (
-                  <span
-                    key={word}
-                    style={{
-                      fontSize: '10px',
-                      fontFamily: 'DM Mono, monospace',
-                      padding: '3px 8px',
-                      borderRadius: '999px',
-                      background: 'rgba(167,139,250,0.14)',
-                      color: '#c4b5fd',
-                      border: '0.5px solid rgba(167,139,250,0.25)',
-                    }}
-                  >
-                    {word}
-                  </span>
-                ))
-              ) : (
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Not enough text to extract signal words.
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {whyModal}
     </div>
   );
 }

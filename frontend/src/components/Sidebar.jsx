@@ -19,6 +19,11 @@ const NavIcon = ({ path, active }) => {
         <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
       </svg>
     ),
+    '/discover': (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/><circle cx="12" cy="12" r="2" fill="currentColor"/>
+      </svg>
+    ),
     '/settings': (
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="3"/>
@@ -85,6 +90,7 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
         </div>
         {[
           { path: '/', label: 'Dashboard' },
+          { path: '/discover', label: 'Discover Feeds' },
           { path: '/settings', label: 'Settings' },
         ].map(({ path, label }) => {
           const active = location.pathname === path;
@@ -133,7 +139,10 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
               fontSize: '10px', padding: '2px 7px', borderRadius: '20px',
               background: 'rgba(139,92,246,0.15)', color: 'var(--accent-light)', fontFamily: 'DM Mono, monospace',
             }}>
-              {Object.values(topicCounts).reduce((a, b) => a + b, 0)}
+              {Object.values(topicCounts).reduce((acc, v) => {
+                const n = v && typeof v === 'object' ? (v.unread ?? v.total ?? 0) : Number(v || 0);
+                return acc + n;
+              }, 0)}
             </span>
           </button>
 
@@ -164,7 +173,11 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
                   fontSize: '10px', padding: '2px 7px', borderRadius: '20px',
                   background: `${color}20`, color, fontFamily: 'DM Mono, monospace',
                 }}>
-                  {topicCounts[topic] || 0}
+                  {(() => {
+                    const v = topicCounts[topic];
+                    if (!v) return 0;
+                    return typeof v === 'object' ? (v.unread ?? v.total ?? 0) : Number(v || 0);
+                  })()}
                 </span>
               </button>
             );

@@ -19,8 +19,9 @@ async def lifespan(app: FastAPI):
     init_db()
     start_scheduler()
 
-    thread = threading.Thread(target=run_pipeline, daemon=True)
-    thread.start()
+    # Optional: Run pipeline in background thread (disabled by default to avoid blocking startup)
+    # thread = threading.Thread(target=run_pipeline, daemon=True)
+    # thread.start()
 
     yield
 

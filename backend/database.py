@@ -45,12 +45,24 @@ def init_db():
             topic TEXT,
             language TEXT DEFAULT 'English',
             last_fetched_at TEXT,
+            is_recommended INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id)
         )
     """)
     
     try:
         cursor.execute("ALTER TABLE feeds ADD COLUMN language TEXT DEFAULT 'English'")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE feeds ADD COLUMN is_recommended INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE feeds ADD COLUMN created_at TEXT DEFAULT CURRENT_TIMESTAMP")
     except Exception:
         pass
 
@@ -68,6 +80,8 @@ def init_db():
             inference_log TEXT,
             published_at TEXT,
             fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            is_read INTEGER DEFAULT 0,
+            read_at TEXT,
             FOREIGN KEY (feed_id) REFERENCES feeds(id)
         )
     """)
@@ -84,6 +98,16 @@ def init_db():
 
     try:
         cursor.execute("ALTER TABLE articles ADD COLUMN language TEXT DEFAULT 'English'")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN is_read INTEGER DEFAULT 0")
+    except Exception:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE articles ADD COLUMN read_at TEXT")
     except Exception:
         pass
 

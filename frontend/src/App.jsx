@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import Subscribe from './pages/Subscribe';
+import DiscoverFeeds from './pages/DiscoverFeeds';
 import Login from './pages/Login';
 import Register from './pages/Register';
 
@@ -35,6 +36,11 @@ function AppContent() {
       <Route path="/settings" element={
         <ProtectedRoute>
           <AppLayout><Subscribe /></AppLayout>
+        </ProtectedRoute>
+      } />
+      <Route path="/discover" element={
+        <ProtectedRoute>
+          <AppLayout><DiscoverFeeds /></AppLayout>
         </ProtectedRoute>
       } />
     </Routes>

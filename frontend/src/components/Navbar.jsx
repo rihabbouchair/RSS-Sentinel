@@ -36,10 +36,10 @@ export default function Navbar() {
       {/* Page title */}
       <div>
         <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
-          {location.pathname === '/' ? 'Dashboard' : 'Settings'}
+          {location.pathname === '/' ? 'Dashboard' : location.pathname === '/discover' ? 'Discover Feeds' : 'Settings'}
         </div>
         <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          {location.pathname === '/' ? 'Real-time news sentiment analysis' : 'Manage your preferences & feeds'}
+          {location.pathname === '/' ? 'Real-time news sentiment analysis' : location.pathname === '/discover' ? 'Browse & subscribe to new feeds' : 'Manage your preferences & feeds'}
         </div>
       </div>
 

@@ -1,20 +1,3 @@
-"""
-pipeline.py
------------
-Two-stage article processing:
-
-  Stage 1 — Fast keyword pre-filter (microseconds, no LLM)
-    • Google News feeds are already topic-specific → skip pre-filter, trust them.
-    • Generic newspaper feeds (Echorouk, Ennahar, Al Arabiya, TSA…) get a title-only
-      keyword check. If the title has zero matches for the topic, the article is dropped
-      immediately — no Ollama call wasted.
-
-  Stage 2 — LLM analysis (one article at a time)
-    • Trusted feeds (Google News, BBC sub-feeds): SHORT prompt → sentiment + summary only.
-      Topic is already known; no need to ask the LLM to classify it again.
-    • Generic feeds that passed the pre-filter: FULL prompt → topic + sentiment + summary.
-      The LLM confirms topic relevance and can still reject off-topic articles.
-"""
 
 import feedparser
 import json
@@ -845,6 +828,22 @@ def run_pipeline_for_user_topic(user_id: int, topic: str):
     print(f"\n=== Topic pipeline: user {user_id}, '{topic}' at {datetime.utcnow()} UTC ===")
     try:
         conn = get_conn()
+        user_row = conn.execute(
+            "SELECT articles_per_topic, language_preferences FROM users WHERE id=?",
+            (user_id,)
+        ).fetchone()
+
+        apt = 3
+        lang_prefs = ["English"]
+        if user_row:
+            apt = user_row["articles_per_topic"] or 3
+            try:
+                lang_prefs = json.loads(user_row["language_preferences"] or '["English"]')
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        lang_dist = calculate_language_distribution(apt, lang_prefs)
+
         feeds = [dict(f) for f in conn.execute(
             "SELECT * FROM feeds WHERE user_id=? AND topic=? ORDER BY id",
             (user_id, topic),
@@ -860,15 +859,25 @@ def run_pipeline_for_user_topic(user_id: int, topic: str):
 
         if max_workers == 1:
             for feed in feeds:
-                articles_added += process_feed(feed, user_id)
+                target = lang_dist.get(feed.get("language", "English"), apt)
+                articles_added += process_feed(feed, user_id, target)
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = [executor.submit(process_feed, feed, user_id) for feed in feeds]
+                futures = [
+                    executor.submit(
+                        process_feed, feed, user_id,
+                        lang_dist.get(feed.get("language", "English"), apt)
+                    )
+                    for feed in feeds
+                ]
                 for future in as_completed(futures):
                     try:
                         articles_added += future.result()
                     except Exception as e:
                         print(f"  Worker failed: {e}")
+
+        # Enforce article count limits to clean up excess from parallel processing
+        enforce_article_limits(user_id, apt, lang_prefs)
 
         print(f"\n=== Topic pipeline complete: '{topic}' → {articles_added} new articles ===")
     finally:

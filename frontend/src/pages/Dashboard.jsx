@@ -18,12 +18,7 @@ export default function Dashboard({ selectedTopic }) {
   useEffect(() => { loadArticles(); }, [selectedTopic, selectedSentiment, showRead]);
 
   useEffect(() => {
-    // Load all articles (no filter) for the summary
-    loadAllArticles();
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => loadArticles(true), 10000);
+    const interval = setInterval(() => loadArticles(true), 30000);
     return () => clearInterval(interval);
   }, [selectedTopic, selectedSentiment]);
 
@@ -84,7 +79,7 @@ export default function Dashboard({ selectedTopic }) {
         const nonFallback = latest.filter(a => !a.is_fallback);
         if (nonFallback.length > 0 || Date.now() - start > 20000) {
           // update list with whichever we have (prefer non-fallback)
-          setArticles(nonFallback.length > 0 ? latest : latest);
+          setArticles(nonFallback.length > 0 ? nonFallback : latest);
           setFetching(false);
           clearInterval(interval);
         }
@@ -98,14 +93,12 @@ export default function Dashboard({ selectedTopic }) {
     setRefreshing(true);
     try {
       await refreshArticles();
-      // Wait 2 seconds then reload articles
-      setTimeout(() => {
-        loadArticles();
-        loadAllArticles();
-        setRefreshing(false);
-      }, 2000);
+      // Give the background pipeline a moment to start before reloading.
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await loadArticles();
     } catch (error) {
       console.error('Failed to refresh pipeline:', error);
+    } finally {
       setRefreshing(false);
     }
   }
@@ -162,19 +155,19 @@ export default function Dashboard({ selectedTopic }) {
 
   const kpis = [
     {
-      label: 'Total Articles', value: total, color: '#a78bfa',
+      label: 'Total Articles', value: total, color: 'var(--accent-light)',
       icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>,
     },
     {
-      label: 'Positive', value: `${pct(pos)}%`, sub: `${pos} articles`, color: '#4ade80',
+      label: 'Positive', value: `${pct(pos)}%`, sub: `${pos} articles`, color: 'var(--positive)',
       icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="20 6 9 17 4 12"/></svg>,
     },
     {
-      label: 'Negative', value: `${pct(neg)}%`, sub: `${neg} articles`, color: '#fb7185',
+      label: 'Negative', value: `${pct(neg)}%`, sub: `${neg} articles`, color: 'var(--negative)',
       icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
     },
     {
-      label: 'Neutral', value: `${pct(neu)}%`, sub: `${neu} articles`, color: '#94a3b8',
+      label: 'Neutral', value: `${pct(neu)}%`, sub: `${neu} articles`, color: 'var(--neutral-color)',
       icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>,
     },
   ];
@@ -216,7 +209,7 @@ export default function Dashboard({ selectedTopic }) {
               </h1>
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', marginTop: '3px' }}>
                 {articles.length} articles · {uniqueSources} sources
-                {(fetching || refreshing) && <span style={{ color: '#a78bfa', marginLeft: '8px' }}>· refreshing...</span>}
+                {(fetching || refreshing) && <span style={{ color: 'var(--accent-light)', marginLeft: '8px' }}>· refreshing...</span>}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -230,20 +223,20 @@ export default function Dashboard({ selectedTopic }) {
                 title={showRead ? 'Hide read articles' : 'Show read articles'}
                 style={{
                   padding: '6px 12px',
-                  background: showRead ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.08)',
-                  border: `0.5px solid ${showRead ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                  background: showRead ? 'rgba(0,229,176,0.15)' : 'rgba(255,255,255,0.08)',
+                  border: `0.5px solid ${showRead ? 'rgba(0,229,176,0.3)' : 'var(--border)'}`,
                   borderRadius: '6px',
-                  color: showRead ? '#4ade80' : 'var(--text-primary)',
+                  color: showRead ? 'var(--positive)' : 'var(--text-primary)',
                   fontSize: '11px',
                   fontWeight: '500',
                   cursor: 'pointer',
                   transition: 'all 0.2s',
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.background = showRead ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.12)';
+                  e.target.style.background = showRead ? 'rgba(0,229,176,0.2)' : 'rgba(255,255,255,0.12)';
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = showRead ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.08)';
+                  e.target.style.background = showRead ? 'rgba(0,229,176,0.15)' : 'rgba(255,255,255,0.08)';
                 }}
               >
                 {showRead ? '✓ All' : 'Unread'}
@@ -276,7 +269,7 @@ export default function Dashboard({ selectedTopic }) {
                 disabled={refreshing}
                 style={{
                   padding: '6px 12px',
-                  background: refreshing ? '#6b7280' : '#8b5cf6',
+                  background: refreshing ? '#6b7280' : 'var(--accent)',
                   border: 'none',
                   borderRadius: '6px',
                   color: 'white',
@@ -286,8 +279,8 @@ export default function Dashboard({ selectedTopic }) {
                   opacity: refreshing ? 0.6 : 1,
                   transition: 'all 0.2s',
                 }}
-                onMouseEnter={(e) => !refreshing && (e.target.style.background = '#7c3aed')}
-                onMouseLeave={(e) => !refreshing && (e.target.style.background = '#8b5cf6')}
+                onMouseEnter={(e) => !refreshing && (e.target.style.background = 'rgba(124,111,255,0.9)')}
+                onMouseLeave={(e) => !refreshing && (e.target.style.background = 'var(--accent)')}
               >
                 {refreshing ? 'Refreshing...' : '↻ Refresh Now'}
               </button>
@@ -304,7 +297,9 @@ export default function Dashboard({ selectedTopic }) {
         ) : articles.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0' }}>
             <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>No articles found.</div>
-            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>Pipeline is fetching articles, check back soon...</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+              {selectedTopic ? 'Pipeline is fetching articles, check back soon...' : 'Select a topic from the sidebar to get started.'}
+            </div>
           </div>
         ) : (
           <>
@@ -332,8 +327,8 @@ export default function Dashboard({ selectedTopic }) {
                 <div style={{
                   padding: '7px 18px', borderRadius: '8px', fontSize: '12px',
                   fontFamily: 'DM Mono, monospace',
-                  background: 'rgba(124,58,237,0.15)',
-                  border: '0.5px solid rgba(124,58,237,0.3)', color: '#a78bfa',
+                  background: 'rgba(124,111,255,0.15)',
+                  border: '0.5px solid rgba(124,111,255,0.3)', color: 'var(--accent-light)',
                 }}>
                   {currentPage} / {totalPages}
                 </div>

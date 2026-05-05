@@ -15,13 +15,20 @@ function AppContent() {
   const { token } = useAuth();
 
   const AppLayout = ({ children }) => (
-    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
-      <Sidebar selectedTopic={selectedTopic} onTopicSelect={setSelectedTopic} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-        <Navbar />
-        {children}
+    <>
+      <div className="mesh" aria-hidden="true">
+        <div className="mesh-orb m1"></div>
+        <div className="mesh-orb m2"></div>
+        <div className="mesh-orb m3"></div>
       </div>
-    </div>
+      <div className="app-shell" style={{ display: 'flex', height: '100vh', background: 'transparent', color: 'var(--text-primary)' }}>
+        <Sidebar selectedTopic={selectedTopic} onTopicSelect={setSelectedTopic} />
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <Navbar />
+          {children}
+        </div>
+      </div>
+    </>
   );
 
   return (

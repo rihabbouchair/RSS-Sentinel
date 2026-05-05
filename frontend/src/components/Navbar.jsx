@@ -28,17 +28,19 @@ export default function Navbar() {
 
   return (
     <div style={{
-      background: 'var(--bg-surface)',
+      background: 'var(--bg-secondary)',
+      backdropFilter: 'var(--blur)',
+      WebkitBackdropFilter: 'var(--blur)',
       borderBottom: '0.5px solid var(--border)',
       padding: '12px 24px',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
     }}>
       {/* Page title */}
       <div>
-        <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)' }}>
+        <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: '20px' }}>
           {location.pathname === '/' ? 'Dashboard' : location.pathname === '/discover' ? 'Discover Feeds' : 'Settings'}
         </div>
-        <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '14px' }}>
           {location.pathname === '/' ? 'Real-time news sentiment analysis' : location.pathname === '/discover' ? 'Browse & subscribe to new feeds' : 'Manage your preferences & feeds'}
         </div>
       </div>
@@ -54,6 +56,8 @@ export default function Navbar() {
           background: 'rgba(255,255,255,0.05)', border: '0.5px solid var(--border)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', position: 'relative',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
         }}
         >
           {theme === 'dark' ? (
@@ -72,9 +76,10 @@ export default function Navbar() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{
             width: '32px', height: '32px', borderRadius: '50%',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            background: 'rgba(124,111,255,0.2)',
+            border: '0.5px solid rgba(124,111,255,0.35)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '12px', fontWeight: '600', color: 'white',
+            fontSize: '12px', fontWeight: '600', color: 'var(--accent-light)',
           }}>
             {initials}
           </div>
@@ -89,7 +94,7 @@ export default function Navbar() {
                 fontSize: '10px', color: 'var(--text-muted)', cursor: 'pointer',
                 transition: 'color 0.15s',
               }}
-              onMouseEnter={e => e.target.style.color = '#fb7185'}
+              onMouseEnter={e => e.target.style.color = 'var(--negative)'}
               onMouseLeave={e => e.target.style.color = 'var(--text-muted)'}
             >
               Sign out

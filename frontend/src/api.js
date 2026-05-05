@@ -161,9 +161,13 @@ export async function getUnreadCounts() {
 }
 
 // ── Feed Discovery & Recommendations ───────────────────────────────────────────
-export async function discoverFeeds(topic = null, limit = 10) {
+export async function discoverFeeds(topicOrTopics = null, limit = 10) {
   const params = new URLSearchParams();
-  if (topic) params.append('topic', topic);
+  if (Array.isArray(topicOrTopics)) {
+    topicOrTopics.filter(Boolean).forEach((topic) => params.append('topics', topic));
+  } else if (topicOrTopics) {
+    params.append('topic', topicOrTopics);
+  }
   params.append('limit', limit);
   const response = await fetch(`${API_BASE}/feeds/discover?${params.toString()}`, {
     headers: getAuthHeaders(),

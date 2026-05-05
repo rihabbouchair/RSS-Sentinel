@@ -30,12 +30,14 @@ export default function Login() {
 
   const inputStyle = {
     width: '100%', padding: '10px 14px',
-    background: 'rgba(255,255,255,0.05)',
+    background: 'rgba(255,255,255,0.06)',
     border: '0.5px solid var(--border)',
     borderRadius: '8px', color: 'var(--text-primary)',
     fontSize: '13px', outline: 'none',
     transition: 'border-color 0.15s',
-    fontFamily: 'inherit',
+    fontFamily: 'Plus Jakarta Sans, system-ui, sans-serif',
+    backdropFilter: 'var(--blur)',
+    WebkitBackdropFilter: 'var(--blur)',
   };
 
   return (
@@ -47,26 +49,25 @@ export default function Login() {
       <div style={{
         position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%, -50%)',
         width: '400px', height: '400px', borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)',
+        background: 'radial-gradient(circle, rgba(124,111,255,0.12) 0%, transparent 70%)',
         pointerEvents: 'none',
       }} />
 
-      <div style={{
+      <div className="gc" style={{
         width: '100%', maxWidth: '380px',
-        background: 'var(--bg-surface)',
-        border: '0.5px solid var(--border)',
-        borderRadius: '16px', padding: '36px 32px',
+        padding: '36px 32px',
       }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div style={{
             width: '44px', height: '44px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            background: 'rgba(124,111,255,0.18)',
+            border: '0.5px solid rgba(124,111,255,0.35)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 12px',
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="white" stroke="none"/>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2.5">
+              <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="var(--accent-light)" stroke="none"/>
             </svg>
           </div>
           <h1 style={{ fontSize: '20px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 4px' }}>
@@ -85,7 +86,7 @@ export default function Login() {
               onChange={(e) => setUsername(e.target.value)}
               required placeholder="Enter username"
               style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#7c3aed'}
+              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
               onBlur={e => e.target.style.borderColor = 'var(--border)'}
             />
           </div>
@@ -99,7 +100,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required placeholder="Enter password"
               style={inputStyle}
-              onFocus={e => e.target.style.borderColor = '#7c3aed'}
+              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
               onBlur={e => e.target.style.borderColor = 'var(--border)'}
             />
           </div>
@@ -107,8 +108,8 @@ export default function Login() {
           {error && (
             <div style={{
               padding: '10px 12px', borderRadius: '8px', fontSize: '12px',
-              background: 'rgba(251,113,133,0.1)', color: '#fb7185',
-              border: '0.5px solid rgba(251,113,133,0.25)',
+              background: 'rgba(255,85,114,0.1)', color: 'var(--negative)',
+              border: '0.5px solid rgba(255,85,114,0.25)',
             }}>
               {error}
             </div>
@@ -119,15 +120,13 @@ export default function Login() {
             disabled={loading || !username || !password}
             style={{
               width: '100%', padding: '11px',
-              background: loading || !username || !password
-                ? 'rgba(255,255,255,0.05)'
-                : 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-              border: 'none', borderRadius: '8px',
+              background: loading || !username || !password ? 'rgba(255,255,255,0.05)' : 'var(--accent)',
+              border: '0.5px solid rgba(124,111,255,0.35)', borderRadius: '8px',
               color: loading || !username || !password ? 'var(--text-muted)' : 'white',
               fontSize: '13px', fontWeight: '500',
               cursor: loading || !username || !password ? 'not-allowed' : 'pointer',
-              transition: 'opacity 0.15s',
-              fontFamily: 'inherit',
+              transition: 'background 0.15s, opacity 0.15s',
+              fontFamily: 'JetBrains Mono, monospace',
             }}
           >
             {loading ? 'Signing in...' : 'Sign in'}
@@ -136,7 +135,7 @@ export default function Login() {
 
         <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '12px', color: 'var(--text-muted)' }}>
           No account?{' '}
-          <Link to="/register" style={{ color: '#a78bfa', textDecoration: 'none' }}>
+          <Link to="/register" style={{ color: 'var(--accent-light)', textDecoration: 'none' }}>
             Register here
           </Link>
         </p>

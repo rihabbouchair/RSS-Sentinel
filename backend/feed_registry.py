@@ -126,7 +126,13 @@ ALGERIAN_FRENCH = {
 def _append_topic_feed(feeds: list, mapping: dict, topic: str, language: str, default_url: str, allowed_topics: set[str] | None = None):
     if allowed_topics is not None and topic not in allowed_topics:
         return
-    feeds.append((mapping.get(topic, default_url), language))
+    value = mapping.get(topic, default_url)
+    # Support single URL or list of URLs in mapping
+    if isinstance(value, (list, tuple)):
+        for url in value:
+            feeds.append((url, language))
+    else:
+        feeds.append((value, language))
 
 def get_feed_urls(topic: str, languages: list = None) -> list:
     """Generate language-specific RSS feed URLs for a topic.
@@ -148,6 +154,66 @@ def get_feed_urls(topic: str, languages: list = None) -> list:
     
     if 'English' in languages:
         feeds.append((f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en", "English"))
+        # Add curated English sources per topic to ensure discover returns real feeds
+        ENGLISH_SOURCES = {
+            "AI": [
+                "https://venturebeat.com/category/ai/feed/",
+                "https://www.technologyreview.com/feed/",
+            ],
+            "Tech": [
+                "https://www.theverge.com/rss/index.xml",
+                "https://feeds.arstechnica.com/arstechnica/index",
+            ],
+            "Politics": [
+                "https://www.politico.com/rss/politics08.xml",
+                "https://www.theguardian.com/politics/rss",
+            ],
+            "Sport": [
+                "https://www.espn.com/espn/rss/news",
+                "https://feeds.skysports.com/skysports/rss/12040",
+            ],
+            "Economy": [
+                "https://www.theguardian.com/business/rss",
+                "https://www.ft.com/?format=rss",
+            ],
+            "Science": [
+                "https://www.sciencedaily.com/rss/all.xml",
+                "https://www.nature.com/subjects/research.rss",
+            ],
+            "Health": [
+                "https://www.who.int/feeds/entity/mediacentre/news/en/rss.xml",
+                "https://www.healthline.com/rss",
+            ],
+            "World": [
+                "https://www.reuters.com/world/rss",
+                "https://www.theguardian.com/world/rss",
+            ],
+            "Climate": [
+                "https://www.climatechangenews.com/feed/",
+                "https://www.carbonbrief.org/feed/",
+            ],
+            "Crypto": [
+                "https://cointelegraph.com/rss",
+                "https://www.coindesk.com/arc/outboundfeeds/rss/",
+            ],
+            "Entertainment": [
+                "https://variety.com/feed/",
+                "https://www.hollywoodreporter.com/t/headlines/feed/",
+            ],
+            "Education": [
+                "https://www.insidehighered.com/rss.xml",
+                "https://www.timeshighereducation.com/rss",
+            ],
+            "Travel": [
+                "https://www.lonelyplanet.com/news/feed",
+                "https://www.nationalgeographic.com/travel/_jcr_content/.feed",
+            ],
+            "Gaming": [
+                "https://www.polygon.com/rss/index.xml",
+                "https://www.ign.com/articles?format=rss",
+            ],
+        }
+        _append_topic_feed(feeds, ENGLISH_SOURCES, topic, "English", f"https://news.google.com/rss/search?q={query}&hl=en&gl=US&ceid=US:en")
     
     if 'French' in languages:
         feeds.append((f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr", "French"))

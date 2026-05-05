@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query, Depends, Body
-from typing import Optional
+from typing import Optional, List
 import json
 from threading import Thread
 from fastapi import Query
@@ -301,8 +301,12 @@ def get_unread_counts(current_user: dict = Depends(get_current_user)):
 
 # ── Feed Discovery & Recommendations ───────────────────────────────────────────
 @router.get("/feeds/discover")
-def discover_feeds(topic: Optional[str] = None, limit: int = Query(10, le=50)):
-    """Browse recommended and popular feeds, optionally filtered by topic."""
+def discover_feeds(
+    topic: Optional[str] = None,
+    topics: Optional[List[str]] = Query(None),
+    limit: int = Query(10, le=50),
+):
+    """Browse recommended and popular feeds, optionally filtered by one or more topics."""
     conn = get_conn()
     try:
         query = """
@@ -311,10 +315,20 @@ def discover_feeds(topic: Optional[str] = None, limit: int = Query(10, le=50)):
             WHERE user_id = 0
         """
         params = []
-        
+
+        selected_topics = []
+        if topics:
+            selected_topics.extend([t for t in topics if t])
         if topic:
-            query += " AND topic = ?"
-            params.append(topic)
+            selected_topics.append(topic)
+
+        # preserve order while removing duplicates
+        selected_topics = list(dict.fromkeys(selected_topics))
+
+        if selected_topics:
+            placeholders = ", ".join("?" * len(selected_topics))
+            query += f" AND topic IN ({placeholders})"
+            params.extend(selected_topics)
         
         query += " ORDER BY is_recommended DESC LIMIT ?"
         params.append(limit)

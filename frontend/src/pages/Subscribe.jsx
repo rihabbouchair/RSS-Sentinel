@@ -14,21 +14,21 @@ const POPULAR_TOPICS = [
 ];
 
 const topicColors = {
-  AI: '#a78bfa',
-  Tech: '#38bdf8',
-  Politics: '#fb923c',
-  Sport: '#fb7185',
-  Economy: '#4ade80',
-  Science: '#34d399',
-  Health: '#2dd4bf',
-  Business: '#60a5fa',
-  Entertainment: '#f472b6',
-  World: '#f59e0b',
-  Climate: '#22c55e',
-  Crypto: '#fbbf24',
-  Education: '#818cf8',
-  Travel: '#06b6d4',
-  Gaming: '#a3e635',
+  AI: 'var(--accent)',
+  Tech: 'var(--positive)',
+  Politics: 'var(--negative)',
+  Sport: 'var(--negative)',
+  Economy: 'var(--positive)',
+  Science: 'var(--accent-light)',
+  Health: 'var(--positive)',
+  Business: 'var(--accent-light)',
+  Entertainment: 'var(--accent)',
+  World: 'var(--accent-light)',
+  Climate: 'var(--positive)',
+  Crypto: 'var(--accent)',
+  Education: 'var(--accent-light)',
+  Travel: 'var(--positive)',
+  Gaming: 'var(--positive)',
 };
 
 function normalizeTopicLabel(topic) {
@@ -118,7 +118,11 @@ export default function Subscribe() {
   function addTopic(topic) {
     const normalized = normalizeTopicLabel(topic);
     if (!normalized) return;
-    setSelectedTopics((prev) => (prev.includes(normalized) ? prev : [...prev, normalized]));
+    if (selectedTopics.includes(normalized)) {
+      setMessage({ type: 'error', text: `"${normalized}" is already in your topics.` });
+      return;
+    }
+    setSelectedTopics((prev) => [...prev, normalized]);
   }
 
   const availableTopics = useMemo(
@@ -208,24 +212,24 @@ export default function Subscribe() {
   const inputStyle = {
     width: '100%',
     padding: '10px 14px',
-    background: 'rgba(255,255,255,0.05)',
+    background: 'rgba(255,255,255,0.06)',
     border: '0.5px solid var(--border)',
     borderRadius: '8px',
     color: 'var(--text-primary)',
     fontSize: '13px',
     outline: 'none',
     transition: 'border-color 0.15s',
-    fontFamily: 'inherit',
+    fontFamily: 'Plus Jakarta Sans, system-ui, sans-serif',
+    backdropFilter: 'var(--blur)',
+    WebkitBackdropFilter: 'var(--blur)',
   };
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg-base)', padding: '24px' }}>
-      <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+      <div style={{ width: '100%', maxWidth: '1120px', margin: '0 auto' }}>
         <div
+          className="gc"
           style={{
-            background: 'var(--bg-surface)',
-            border: '0.5px solid var(--border)',
-            borderRadius: '12px',
             padding: '24px',
             marginBottom: '16px',
           }}
@@ -248,13 +252,13 @@ export default function Subscribe() {
               />
 
               {verifiedEmail && emailVerified && (
-                <div style={{ marginTop: '8px', fontSize: '12px', color: '#4ade80' }}>
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--positive)' }}>
                   Verified email: {verifiedEmail}
                 </div>
               )}
 
               {pendingEmail && !emailVerified && (
-                <div style={{ marginTop: '8px', fontSize: '12px', color: '#f59e0b' }}>
+                <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--accent-light)' }}>
                   Pending verification: {pendingEmail}
                 </div>
               )}
@@ -277,10 +281,10 @@ export default function Subscribe() {
                       borderRadius: '6px',
                       cursor: 'pointer',
                       background: languagePreferences.includes(lang)
-                        ? 'rgba(96, 165, 250, 0.2)'
+                        ? 'rgba(124,111,255,0.18)'
                         : 'rgba(255,255,255,0.03)',
                       border: languagePreferences.includes(lang)
-                        ? '0.5px solid rgba(96, 165, 250, 0.4)'
+                        ? '0.5px solid rgba(124,111,255,0.4)'
                         : '0.5px solid var(--border)',
                       transition: 'all 0.15s',
                     }}
@@ -317,7 +321,7 @@ export default function Subscribe() {
                 onChange={(e) => setArticlesPerTopic(Math.max(1, Math.min(20, parseInt(e.target.value) || 3)))}
                 style={inputStyle}
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
                 Controls how many articles are analyzed per topic with language distribution (English priority)
               </div>
             </div>
@@ -330,7 +334,7 @@ export default function Subscribe() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                 {selectedTopics.map((topic) => {
                   const selected = selectedTopics.includes(topic);
-                  const color = topicColors[topic] || '#a78bfa';
+                  const color = topicColors[topic] || 'var(--accent-light)';
 
                   return (
                     <label
@@ -393,7 +397,7 @@ export default function Subscribe() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
                     {availableTopics.map((topic) => {
-                      const color = topicColors[topic] || '#a78bfa';
+                      const color = topicColors[topic] || 'var(--accent-light)';
                       return (
                         <label
                           key={topic}
@@ -467,8 +471,8 @@ export default function Subscribe() {
                       padding: '10px 14px',
                       borderRadius: '8px',
                       border: '0.5px solid var(--border)',
-                      background: customTopic.trim() ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.04)',
-                      color: customTopic.trim() ? '#86efac' : 'var(--text-muted)',
+                      background: customTopic.trim() ? 'rgba(0,229,176,0.15)' : 'rgba(255,255,255,0.04)',
+                      color: customTopic.trim() ? 'var(--positive)' : 'var(--text-muted)',
                       cursor: customTopic.trim() ? 'pointer' : 'not-allowed',
                       fontSize: '12px',
                       fontWeight: '500',
@@ -499,8 +503,8 @@ export default function Subscribe() {
                     height: '16px',
                     borderRadius: '4px',
                     flexShrink: 0,
-                    background: wantsDigest ? '#7c3aed' : 'transparent',
-                    border: wantsDigest ? '1.5px solid #7c3aed' : '1.5px solid var(--border)',
+                    background: wantsDigest ? 'var(--accent)' : 'transparent',
+                    border: wantsDigest ? '1.5px solid var(--accent)' : '1.5px solid var(--border)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -529,11 +533,13 @@ export default function Subscribe() {
                 style={{
                   padding: '14px',
                   borderRadius: '10px',
-                  background: 'rgba(245,158,11,0.08)',
-                  border: '0.5px solid rgba(245,158,11,0.25)',
+                  background: 'rgba(124,111,255,0.1)',
+                  border: '0.5px solid rgba(124,111,255,0.3)',
+                  backdropFilter: 'var(--blur)',
+                  WebkitBackdropFilter: 'var(--blur)',
                 }}
               >
-                <div style={{ fontSize: '12px', color: '#fbbf24', marginBottom: '10px', fontWeight: '600' }}>
+                <div style={{ fontSize: '12px', color: 'var(--accent-light)', marginBottom: '10px', fontWeight: '600' }}>
                   Verify your email
                 </div>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
@@ -556,9 +562,10 @@ export default function Subscribe() {
                     style={{
                       padding: '10px 14px',
                       borderRadius: '8px',
-                      border: 'none',
-                      background: '#f59e0b',
+                      border: '0.5px solid rgba(124,111,255,0.35)',
+                      background: 'var(--accent)',
                       color: 'white',
+                      fontFamily: 'JetBrains Mono, monospace',
                       cursor: verifying ? 'not-allowed' : 'pointer',
                       opacity: verifying ? 0.7 : 1,
                     }}
@@ -575,6 +582,7 @@ export default function Subscribe() {
                       border: '0.5px solid var(--border)',
                       background: 'rgba(255,255,255,0.04)',
                       color: 'var(--text-primary)',
+                      fontFamily: 'JetBrains Mono, monospace',
                       cursor: resending ? 'not-allowed' : 'pointer',
                       opacity: resending ? 0.7 : 1,
                     }}
@@ -591,13 +599,15 @@ export default function Subscribe() {
                   padding: '10px 12px',
                   borderRadius: '8px',
                   fontSize: '12px',
-                  background: message.type === 'success' ? 'rgba(74,222,128,0.1)' : 'rgba(251,113,133,0.1)',
-                  color: message.type === 'success' ? '#4ade80' : '#fb7185',
+                  background: message.type === 'success' ? 'rgba(0,229,176,0.1)' : 'rgba(255,85,114,0.1)',
+                  color: message.type === 'success' ? 'var(--positive)' : 'var(--negative)',
                   border: `0.5px solid ${
                     message.type === 'success'
-                      ? 'rgba(74,222,128,0.25)'
-                      : 'rgba(251,113,133,0.25)'
+                      ? 'rgba(0,229,176,0.25)'
+                      : 'rgba(255,85,114,0.25)'
                   }`,
+                  backdropFilter: 'var(--blur)',
+                  WebkitBackdropFilter: 'var(--blur)',
                 }}
               >
                 {message.text}
@@ -612,15 +622,15 @@ export default function Subscribe() {
                 background:
                   loading || selectedTopics.length === 0
                     ? 'rgba(255,255,255,0.05)'
-                    : 'linear-gradient(135deg,#6366f1,#8b5cf6)',
-                border: 'none',
+                    : 'var(--accent)',
+                border: '0.5px solid rgba(124,111,255,0.35)',
                 borderRadius: '8px',
                 color: loading || selectedTopics.length === 0 ? 'var(--text-muted)' : 'white',
                 fontSize: '13px',
                 fontWeight: '500',
                 cursor: loading || selectedTopics.length === 0 ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-                transition: 'opacity 0.15s',
+                fontFamily: 'JetBrains Mono, monospace',
+                transition: 'opacity 0.15s, background 0.15s',
               }}
             >
               {loading ? 'Saving...' : 'Save Preferences'}
@@ -629,10 +639,8 @@ export default function Subscribe() {
         </div>
 
         <div
+          className="gc"
           style={{
-            background: 'var(--bg-surface)',
-            border: '0.5px solid var(--border)',
-            borderRadius: '12px',
             padding: '24px',
           }}
         >
@@ -644,7 +652,7 @@ export default function Subscribe() {
                 fontSize: '11px',
                 color: 'var(--text-muted)',
                 fontWeight: '400',
-                fontFamily: 'DM Mono, monospace',
+                fontFamily: 'JetBrains Mono, monospace',
               }}
             >
               {feeds.length} total
@@ -658,7 +666,7 @@ export default function Subscribe() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {feeds.map((feed) => {
-                const color = topicColors[feed.topic] || '#a78bfa';
+                const color = topicColors[feed.topic] || 'var(--accent-light)';
 
                 return (
                   <div
@@ -681,7 +689,7 @@ export default function Subscribe() {
                       <span
                         style={{
                           fontSize: '11px',
-                          fontFamily: 'DM Mono, monospace',
+                          fontFamily: 'JetBrains Mono, monospace',
                           padding: '2px 8px',
                           borderRadius: '4px',
                           background: `${color}18`,
@@ -690,14 +698,14 @@ export default function Subscribe() {
                       >
                         {feed.topic}
                       </span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: '#22c55e' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: 'var(--positive)' }}>
                         <span
                           className="pulse-dot"
                           style={{
                             width: '5px',
                             height: '5px',
                             borderRadius: '50%',
-                            background: '#22c55e',
+                            background: 'var(--positive)',
                             display: 'inline-block',
                           }}
                         />
@@ -709,7 +717,7 @@ export default function Subscribe() {
                       style={{
                         fontSize: '11px',
                         color: 'var(--text-muted)',
-                        fontFamily: 'DM Mono, monospace',
+                        fontFamily: 'JetBrains Mono, monospace',
                         wordBreak: 'break-all',
                         marginBottom: '4px',
                       }}

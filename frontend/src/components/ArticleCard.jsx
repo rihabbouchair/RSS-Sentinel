@@ -2,18 +2,18 @@ import { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 const sentimentConfig = {
-  Positive: { color: '#4ade80', bg: 'rgba(74,222,128,0.10)', border: 'rgba(74,222,128,0.25)', bar: '#4ade80' },
-  Negative: { color: '#fb7185', bg: 'rgba(251,113,133,0.10)', border: 'rgba(251,113,133,0.25)', bar: '#fb7185' },
-  Neutral: { color: '#94a3b8', bg: 'rgba(148,163,184,0.10)', border: 'rgba(148,163,184,0.25)', bar: '#64748b' },
+  Positive: { color: 'var(--positive)', bg: 'rgba(0,229,176,0.10)', border: 'rgba(0,229,176,0.25)', bar: 'var(--positive)' },
+  Negative: { color: 'var(--negative)', bg: 'rgba(255,85,114,0.10)', border: 'rgba(255,85,114,0.25)', bar: 'var(--negative)' },
+  Neutral: { color: 'var(--neutral-color)', bg: 'rgba(122,143,168,0.10)', border: 'rgba(122,143,168,0.25)', bar: 'var(--neutral-color)' },
 };
 
 const topicColors = {
-  AI: '#a78bfa',
-  Tech: '#38bdf8',
-  Politics: '#fb923c',
-  Sport: '#fb7185',
-  Economy: '#4ade80',
-  Science: '#34d399',
+  AI: 'var(--accent)',
+  Tech: 'var(--positive)',
+  Politics: 'var(--negative)',
+  Sport: 'var(--positive)',
+  Economy: 'var(--accent-light)',
+  Science: 'var(--positive)',
 };
 
 function formatDate(dateString) {
@@ -32,10 +32,10 @@ function formatDate(dateString) {
 
 const getConfidenceStyles = (score) => {
   if (!score && score !== 0) return { color: '#94a3b8', label: 'Uncertain' };
-  if (score >= 0.9) return { color: '#22c55e', label: 'High Certainty' };
-  if (score >= 0.7) return { color: '#a855f7', label: 'Reliable' };
-  if (score >= 0.5) return { color: '#eab308', label: 'Average' };
-  return { color: '#ef4444', label: 'Low Certainty' };
+  if (score >= 0.9) return { color: 'var(--positive)', label: 'High Certainty' };
+  if (score >= 0.7) return { color: 'var(--accent)', label: 'Reliable' };
+  if (score >= 0.5) return { color: 'var(--accent-light)', label: 'Average' };
+  return { color: 'var(--negative)', label: 'Low Certainty' };
 };
 
 const stopWords = new Set([
@@ -124,7 +124,7 @@ export default function ArticleCard({ article, onMarkRead }) {
   const [showWhy, setShowWhy] = useState(false);
   const sentiment = article.sentiment || 'Neutral';
   const cfg = sentimentConfig[sentiment] || sentimentConfig.Neutral;
-  const feedTopicColor = topicColors[article.feed_topic] || '#a78bfa';
+  const feedTopicColor = topicColors[article.feed_topic] || 'var(--accent-light)';
   const inference = useMemo(() => parseInferenceLog(article.inference_log), [article.inference_log]);
   const signalWords = useMemo(() => extractSignalWords(inference, article), [inference, article]);
   const displaySummary = useMemo(() => getDisplaySummary(article, inference), [article, inference]);
@@ -139,7 +139,7 @@ export default function ArticleCard({ article, onMarkRead }) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2,6,23,0.65)',
+            background: 'rgba(7,17,29,0.46)',
             backdropFilter: 'blur(10px)',
             WebkitBackdropFilter: 'blur(10px)',
             zIndex: 2000,
@@ -158,7 +158,7 @@ export default function ArticleCard({ article, onMarkRead }) {
               border: '1px solid rgba(167,139,250,0.28)',
               background: 'var(--bg-surface)',
               padding: '24px',
-              boxShadow: '0 40px 120px rgba(0,0,0,0.6)',
+              boxShadow: '0 32px 96px rgba(2,10,24,0.42)',
               overflowY: 'auto',
             }}
           >

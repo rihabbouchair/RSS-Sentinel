@@ -3,12 +3,12 @@ import { Link, useLocation } from 'react-router-dom';
 import { getTopics, getTopicCounts } from '../api';
 
 const topicColors = {
-  AI: '#a78bfa',
-  Tech: '#38bdf8',
-  Politics: '#fb923c',
-  Sport: '#fb7185',
-  Economy: '#4ade80',
-  Science: '#34d399',
+  AI: 'var(--accent)',
+  Tech: 'var(--positive)',
+  Politics: 'var(--negative)',
+  Sport: 'var(--positive)',
+  Economy: 'var(--accent-light)',
+  Science: 'var(--positive)',
 };
 
 const NavIcon = ({ path, active }) => {
@@ -57,28 +57,28 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
   }
 
   return (
-    <div style={{
+    <div className="sidebar" style={{
       width: '220px', minWidth: '220px',
-      background: 'var(--bg-surface)',
-      borderRight: '0.5px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       height: '100vh',
     }}>
       {/* Logo */}
-      <div style={{ padding: '20px 18px 18px', borderBottom: '0.5px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ padding: '12px 18px', borderBottom: '0.5px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <div style={{
             width: '32px', height: '32px', borderRadius: '8px',
-            background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+            background: 'rgba(124,111,255,0.18)',
+            border: '0.5px solid rgba(124,111,255,0.35)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            marginTop: '1px',
           }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2.5">
               <path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1" fill="white" stroke="none"/>
             </svg>
           </div>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: 1.2 }}>RSS Sentinel</div>
-            <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>AI News Analyzer</div>
+            <div style={{ fontSize: '15px', fontWeight: '600', color: 'var(--text-primary)', lineHeight: '20px' }}>RSS Sentinel</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '14px' }}>AI News Analyzer</div>
           </div>
         </div>
       </div>
@@ -99,8 +99,8 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
               display: 'flex', alignItems: 'center', gap: '10px',
               padding: '9px 18px',
               color: active ? 'var(--accent-light)' : 'var(--text-secondary)',
-              background: active ? 'rgba(139,92,246,0.1)' : 'transparent',
-              borderLeft: active ? '2px solid #7c3aed' : '2px solid transparent',
+              background: active ? 'rgba(124,111,255,0.1)' : 'transparent',
+              borderLeft: active ? '2px solid var(--accent)' : '2px solid transparent',
               fontSize: '13px', fontWeight: active ? '500' : '400',
               transition: 'all 0.15s',
               textDecoration: 'none',
@@ -127,8 +127,8 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
             style={{
               width: '100%', textAlign: 'left', padding: '8px 18px',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              background: selectedTopic === null ? 'rgba(139,92,246,0.1)' : 'transparent',
-              borderLeft: selectedTopic === null ? '2px solid #7c3aed' : '2px solid transparent',
+              background: selectedTopic === null ? 'rgba(124,111,255,0.1)' : 'transparent',
+              borderLeft: selectedTopic === null ? '2px solid var(--accent)' : '2px solid transparent',
               color: selectedTopic === null ? 'var(--accent-light)' : 'var(--text-secondary)',
               fontSize: '13px', fontWeight: selectedTopic === null ? '500' : '400',
               cursor: 'pointer', border: 'none', transition: 'all 0.15s',
@@ -137,7 +137,7 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
             <span>All Articles</span>
             <span style={{
               fontSize: '10px', padding: '2px 7px', borderRadius: '20px',
-              background: 'rgba(139,92,246,0.15)', color: 'var(--accent-light)', fontFamily: 'DM Mono, monospace',
+              background: 'rgba(124,111,255,0.15)', color: 'var(--accent-light)', fontFamily: 'JetBrains Mono, monospace',
             }}>
               {Object.values(topicCounts).reduce((acc, v) => {
                 const n = v && typeof v === 'object' ? (v.unread ?? v.total ?? 0) : Number(v || 0);
@@ -171,7 +171,7 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
                 </div>
                 <span style={{
                   fontSize: '10px', padding: '2px 7px', borderRadius: '20px',
-                  background: `${color}20`, color, fontFamily: 'DM Mono, monospace',
+                  background: `${color}20`, color, fontFamily: 'JetBrains Mono, monospace',
                 }}>
                   {(() => {
                     const v = topicCounts[topic];
@@ -187,9 +187,9 @@ export default function Sidebar({ selectedTopic, onTopicSelect }) {
 
       {/* Live indicator */}
       <div style={{ padding: '14px 18px', borderTop: '0.5px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', color: '#22c55e' }}>
-          <span className="pulse-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
-          Live · Auto-refresh 10s
+        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '11px', color: 'var(--positive)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span className="pulse-dot" style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--positive)', display: 'inline-block' }}></span>
+          Live · Auto-refresh 30s
         </div>
       </div>
     </div>

@@ -11,10 +11,14 @@ export default {
         'sans': ['"DM Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
-        'bg-base': '#0d0f14',
-        'bg-surface': '#111318',
-        'accent': '#7c3aed',
-        'accent-light': '#a78bfa',
+        'bg-base': '#04070f',
+        'bg-surface': '#0c1221',
+        'bg-secondary': '#080d1a',
+        'accent': '#7c6fff',
+        'accent-light': '#a89fff',
+        'positive': '#00e5b0',
+        'negative': '#ff5572',
+        'neutral': '#7a8fa8',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease forwards',

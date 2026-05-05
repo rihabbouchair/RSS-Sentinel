@@ -6,12 +6,12 @@ import { register as apiRegister } from '../api';
 const TOPICS = ['AI', 'Tech', 'Politics', 'Sport', 'Economy', 'Science'];
 
 const topicColors = {
-  AI: '#a78bfa',
-  Tech: '#38bdf8',
-  Politics: '#fb923c',
-  Sport: '#fb7185',
-  Economy: '#4ade80',
-  Science: '#34d399',
+  AI: 'var(--accent)',
+  Tech: 'var(--positive)',
+  Politics: 'var(--negative)',
+  Sport: 'var(--negative)',
+  Economy: 'var(--positive)',
+  Science: 'var(--accent-light)',
 };
 
 export default function Register() {
@@ -65,29 +65,31 @@ export default function Register() {
   const inputStyle = {
     width: '100%',
     padding: '10px 14px',
-    background: 'rgba(255,255,255,0.05)',
+    background: 'rgba(255,255,255,0.06)',
     border: '0.5px solid var(--border)',
     borderRadius: '8px',
     color: 'var(--text-primary)',
     fontSize: '13px',
     outline: 'none',
     transition: 'border-color 0.15s',
-    fontFamily: 'inherit',
+    fontFamily: 'Plus Jakarta Sans, system-ui, sans-serif',
+    backdropFilter: 'var(--blur)',
+    WebkitBackdropFilter: 'var(--blur)',
   };
 
   const canSubmit = !loading && username && password && selectedTopics.length > 0;
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-      <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.08) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,111,255,0.12) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-      <div style={{ width: '100%', maxWidth: '420px', background: 'var(--bg-surface)', border: '0.5px solid var(--border)', borderRadius: '16px', padding: '32px' }}>
+      <div className="gc" style={{ width: '100%', maxWidth: '420px', padding: '32px' }}>
         <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(124,111,255,0.18)', border: '0.5px solid rgba(124,111,255,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-light)" strokeWidth="2.5">
               <path d="M4 11a9 9 0 0 1 9 9" />
               <path d="M4 4a16 16 0 0 1 16 16" />
-              <circle cx="5" cy="19" r="1" fill="white" stroke="none" />
+              <circle cx="5" cy="19" r="1" fill="var(--accent-light)" stroke="none" />
             </svg>
           </div>
           <h1 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-primary)', margin: '0 0 4px' }}>Create Account</h1>
@@ -116,7 +118,7 @@ export default function Register() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               {TOPICS.map((topic) => {
                 const selected = selectedTopics.includes(topic);
-                const color = topicColors[topic] || '#a78bfa';
+                const color = topicColors[topic] || 'var(--accent-light)';
 
                 return (
                   <label
@@ -180,10 +182,10 @@ export default function Register() {
                     borderRadius: '6px',
                     cursor: 'pointer',
                     background: languagePreferences.includes(lang)
-                      ? 'rgba(96, 165, 250, 0.2)'
+                      ? 'rgba(124,111,255,0.18)'
                       : 'rgba(255,255,255,0.03)',
                     border: languagePreferences.includes(lang)
-                      ? '0.5px solid rgba(96, 165, 250, 0.4)'
+                      ? '0.5px solid rgba(124,111,255,0.4)'
                       : '0.5px solid var(--border)',
                     transition: 'all 0.15s',
                   }}
@@ -209,7 +211,7 @@ export default function Register() {
           </div>
 
           {error && (
-            <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '12px', background: 'rgba(251,113,133,0.1)', color: '#fb7185', border: '0.5px solid rgba(251,113,133,0.25)' }}>
+            <div style={{ padding: '10px 12px', borderRadius: '8px', fontSize: '12px', background: 'rgba(255,85,114,0.1)', color: 'var(--negative)', border: '0.5px solid rgba(255,85,114,0.25)' }}>
               {error}
             </div>
           )}
@@ -220,14 +222,14 @@ export default function Register() {
             style={{
               width: '100%',
               padding: '11px',
-              background: canSubmit ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(255,255,255,0.05)',
-              border: 'none',
+              background: canSubmit ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+              border: '0.5px solid rgba(124,111,255,0.35)',
               borderRadius: '8px',
               color: canSubmit ? 'white' : 'var(--text-muted)',
               fontSize: '13px',
               fontWeight: '500',
               cursor: canSubmit ? 'pointer' : 'not-allowed',
-              fontFamily: 'inherit',
+              fontFamily: 'JetBrains Mono, monospace',
             }}
           >
             {loading ? 'Creating account...' : 'Create Account'}
@@ -236,7 +238,7 @@ export default function Register() {
 
         <p style={{ textAlign: 'center', marginTop: '16px', fontSize: '12px', color: 'var(--text-muted)' }}>
           Already have an account?{' '}
-          <Link to="/login" style={{ color: '#a78bfa', textDecoration: 'none' }}>
+          <Link to="/login" style={{ color: 'var(--accent-light)', textDecoration: 'none' }}>
             Sign in
           </Link>
         </p>

@@ -36,16 +36,18 @@ export default function DailySummary({ articles }) {
     return (
       <div
         style={{
-          background: 'var(--bg-surface)',
-          border: '0.5px solid rgba(167,139,250,0.2)',
-          borderRadius: '12px',
+              background: 'var(--bg-surface)',
+              border: '0.5px solid rgba(124,111,255,0.2)',
+              borderRadius: '14px',
           padding: '16px 18px',
           marginBottom: '20px',
+              backdropFilter: 'var(--blur)',
+              WebkitBackdropFilter: 'var(--blur)',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a78bfa' }}>
+         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-light)' }}>
           <SparkleIcon />
-          <span style={{ fontSize: '13px', fontWeight: '500' }}>Resume IA du jour</span>
+          <span style={{ fontSize: '13px', fontWeight: '500' }}>Today's Summary</span>
         </div>
         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
           No recent articles yet. Summary will appear automatically.
@@ -60,9 +62,9 @@ export default function DailySummary({ articles }) {
     return (
       <div
         style={{
-          background: 'var(--bg-surface)',
-          border: '0.5px solid rgba(167,139,250,0.25)',
-          borderRadius: '12px',
+              background: 'var(--bg-surface)',
+              border: '0.5px solid rgba(124,111,255,0.25)',
+              borderRadius: '14px',
           padding: '16px 18px',
           marginBottom: '20px',
           cursor: 'pointer',
@@ -71,11 +73,11 @@ export default function DailySummary({ articles }) {
         onClick={() => setExpanded(true)}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a78bfa' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-light)' }}>
             <SparkleIcon />
-            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Resume IA du jour</span>
+            <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Today's Summary</span>
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace' }}>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>
             {data.overall}
           </div>
         </div>
@@ -83,8 +85,8 @@ export default function DailySummary({ articles }) {
         <div
           style={{
             padding: '10px 12px',
-            borderLeft: `3px solid rgba(167,139,250,0.5)`,
-            background: 'rgba(255,255,255,0.02)',
+                borderLeft: `3px solid rgba(124,111,255,0.5)`,
+                background: 'rgba(255,255,255,0.03)',
             borderRadius: '6px',
             fontSize: '11px',
             color: 'var(--text-secondary)',
@@ -114,17 +116,17 @@ export default function DailySummary({ articles }) {
   return (
     <div
       style={{
-        background: 'var(--bg-surface)',
-        border: '0.5px solid rgba(167,139,250,0.25)',
-        borderRadius: '12px',
+          background: 'var(--bg-surface)',
+          border: '0.5px solid rgba(124,111,255,0.25)',
+          borderRadius: '14px',
         padding: '16px 18px',
         marginBottom: '20px',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#a78bfa' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-light)' }}>
           <SparkleIcon />
-          <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Resume IA du jour</span>
+          <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)' }}>Today's Summary</span>
         </div>
         <button
           onClick={() => setExpanded(false)}
@@ -141,8 +143,8 @@ export default function DailySummary({ articles }) {
         </button>
       </div>
 
-      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', fontFamily: 'DM Mono, monospace' }}>
-        Overall: {data.overall}
+      <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '12px', fontFamily: 'JetBrains Mono, monospace' }}>
+          Overall: {data.overall}
       </div>
 
       <div style={{ display: 'grid', gap: '8px' }}>
@@ -152,8 +154,8 @@ export default function DailySummary({ articles }) {
               key={article.id || index}
               style={{
                 padding: '10px 12px',
-                borderLeft: `3px solid rgba(167,139,250,0.4)`,
-                background: 'rgba(255,255,255,0.02)',
+                  borderLeft: `3px solid rgba(124,111,255,0.4)`,
+                  background: 'rgba(255,255,255,0.03)',
                 borderRadius: '6px',
                 fontSize: '11px',
                 color: 'var(--text-secondary)',

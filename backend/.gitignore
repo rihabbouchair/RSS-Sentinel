@@ -8,6 +8,7 @@ __pycache__/
 
 # --- Database ---
 *.db
+data/sentinel.db
 
 # --- Node / Frontend ---
 node_modules/
@@ -16,3 +17,6 @@ dist/
 
 # --- Optional ---
 *.log
+
+#frontend build output
+frontend/dist/

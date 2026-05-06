@@ -18,7 +18,7 @@ from email_service import send_digest
 load_dotenv()
 
 OLLAMA_URL      = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma3:4b")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
 OLLAMA_TIMEOUT  = int(os.getenv("OLLAMA_TIMEOUT", "60"))
 OLLAMA_RETRIES  = int(os.getenv("OLLAMA_RETRIES", "1"))
 

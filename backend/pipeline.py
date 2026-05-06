@@ -18,7 +18,7 @@ from email_service import send_digest
 load_dotenv()
 
 OLLAMA_URL      = os.getenv("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "qwen2.5:3b")
+OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "gemma3:4b")
 OLLAMA_TIMEOUT  = int(os.getenv("OLLAMA_TIMEOUT", "60"))
 OLLAMA_RETRIES  = int(os.getenv("OLLAMA_RETRIES", "1"))
 
@@ -44,8 +44,7 @@ KNOWN_TOPICS = {
 KNOWN_TOPICS_LOWER = {t.lower(): t for t in KNOWN_TOPICS}
 
 # ── Pre-filter keyword bank ────────────────────────────────────────────────────
-# Small focused keyword sets used ONLY for Stage-1 title checks on generic feeds.
-# Each list has ~10-15 high-signal terms in EN + AR + FR roots.
+
 PRE_FILTER_KEYWORDS: dict[str, list[str]] = {
     "AI": [
         "ai", "artificial intelligence", "machine learning", "deep learning",
@@ -167,9 +166,9 @@ PRE_FILTER_KEYWORDS: dict[str, list[str]] = {
     ],
     "World": [
         "world", "global", "international", "united nations", "nato",
-        "summit", "refugee", "humanitarian", "g7", "g20",
+        "summit", "refugee",
         "عالم", "دولي", "أمم متحدة", "قمة",
-        "mondial", "onu",
+        "mondial",
     ],
 }
 
@@ -222,11 +221,7 @@ def _should_skip_topic_pipeline_cooldown(user_id: int, cooldown_secs: int = 2) -
 
 
 def enforce_article_limits(user_id: int, articles_per_topic: int, language_preferences: list):
-    """Remove excess articles to enforce per-topic limits after parallel processing."""
-    if not language_preferences:
-        language_preferences = ["English"]
-    
-    lang_dist = calculate_language_distribution(articles_per_topic, language_preferences)
+    """Remove excess articles so each topic stays within the user's total target."""
     conn = get_conn()
     try:
         # Get all topics for this user
@@ -235,25 +230,23 @@ def enforce_article_limits(user_id: int, articles_per_topic: int, language_prefe
         ).fetchall()]
         
         for topic in topics:
-            for lang, target in lang_dist.items():
-                # Count articles for this topic+language
-                count = conn.execute("""
-                    SELECT COUNT(*) FROM articles a
-                    INNER JOIN feeds f ON a.feed_id = f.id
-                    WHERE f.user_id = ? AND f.topic = ? AND a.language = ?
-                """, (user_id, topic, lang)).fetchone()[0]
-                
-                # If over limit, delete oldest excess articles
-                if count > target:
-                    excess = count - target
-                    conn.execute("""
-                        DELETE FROM articles WHERE id IN (
-                            SELECT a.id FROM articles a
-                            INNER JOIN feeds f ON a.feed_id = f.id
-                            WHERE f.user_id = ? AND f.topic = ? AND a.language = ?
-                            ORDER BY a.fetched_at ASC LIMIT ?
-                        )
-                    """, (user_id, topic, lang, excess))
+            count = conn.execute("""
+                SELECT COUNT(*) FROM articles a
+                INNER JOIN feeds f ON a.feed_id = f.id
+                WHERE f.user_id = ? AND f.topic = ?
+            """, (user_id, topic)).fetchone()[0]
+
+            # If over limit, delete the oldest excess articles for this topic.
+            if count > articles_per_topic:
+                excess = count - articles_per_topic
+                conn.execute("""
+                    DELETE FROM articles WHERE id IN (
+                        SELECT a.id FROM articles a
+                        INNER JOIN feeds f ON a.feed_id = f.id
+                        WHERE f.user_id = ? AND f.topic = ?
+                        ORDER BY a.fetched_at ASC, a.id ASC LIMIT ?
+                    )
+                """, (user_id, topic, excess))
         
         conn.commit()
     finally:
@@ -295,12 +288,11 @@ def detect_language(text: str) -> str:
     return "English"
 
 
-# ── Stage 1: Fast keyword pre-filter ──────────────────────────────────────────
+# ── Fast keyword pre-filter ──────────────────────────────────────────
 def passes_topic_prefilter(title: str, topic: str) -> bool:
     """
     Title-only keyword check for generic feeds.
     Returns True if at least one keyword for the topic appears in the title.
-    No LLM, runs in microseconds.
     """
     keywords = PRE_FILTER_KEYWORDS.get(topic)
     if not keywords:
@@ -309,7 +301,7 @@ def passes_topic_prefilter(title: str, topic: str) -> bool:
     return any(kw in title_lower for kw in keywords)
 
 
-# ── Stage 2a: Short LLM prompt (trusted feeds) ────────────────────────────────
+# ── Short LLM prompt (trusted feeds) ────────────────────────────────
 def _build_short_prompt(candidate: dict) -> str:
     lang = candidate["language"]
     title = candidate["title"]
@@ -348,7 +340,7 @@ Text: {excerpt}
 JSON:"""
 
 
-# ── Stage 2b: Full LLM prompt (generic feeds that passed pre-filter) ───────────
+# ──  Full LLM prompt (generic feeds that passed pre-filter) ───────────
 def _build_full_prompt(candidate: dict) -> str:
     lang = candidate["language"]
     title = candidate["title"]
@@ -397,7 +389,6 @@ Text: {excerpt}
 JSON:"""
 
 
-# ── Ollama call ────────────────────────────────────────────────────────────────
 def _call_ollama(prompt: str, title: str) -> dict | None:
     """Send prompt to Ollama. Returns parsed JSON dict or None."""
     num_ctx = 1024 if len(prompt) < 800 else 1536
@@ -648,15 +639,16 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
     print(f"\nFeed: {broad_topic} ({feed_lang}) {label} — {feed_url}")
 
     try:
-        lang_count = get_topic_article_count(user_id, broad_topic, feed_lang)
-        if lang_count >= MAX_ARTICLES_PER_TOPIC:
+        # Early check to avoid fetching if obviously over cap
+        topic_count = get_topic_article_count(user_id, broad_topic)
+        if topic_count >= MAX_ARTICLES_PER_TOPIC:
             print(f"  At cap ({MAX_ARTICLES_PER_TOPIC}), skipping.")
             return 0
 
         desired = min(
             ARTICLES_PER_FEED,
-            max(0, target - lang_count),
-            MAX_ARTICLES_PER_TOPIC - lang_count,
+            max(0, target - topic_count),
+            MAX_ARTICLES_PER_TOPIC - topic_count,
         )
         if desired <= 0:
             print(f"  Already has enough articles.")
@@ -690,7 +682,7 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
                 print(f"  No articles passed pre-filter, skipping feed.")
                 return 0
 
-        # ── Stage 2: LLM analysis, one article at a time ───────────────────────
+        # ── Stage 2: LLM analysis and insertion ───────────────────────────────────
         for candidate in fresh:
             if added >= desired:
                 break
@@ -727,9 +719,9 @@ def process_feed(feed: dict, user_id: int, language_per_topic_target: int = None
                     if conn.total_changes > 0:
                         added += 1
                         print(
-                            f"      Saved [{result['topic']}] "
-                            f"{result['sentiment']} ({result['confidence_score']:.2f})"
-                        )
+                                f"      Saved [{result['topic']}] "
+                                f"{result['sentiment']} ({result['confidence_score']:.2f})"
+                            )
                 finally:
                     conn.close()
             except Exception as e:
@@ -791,15 +783,13 @@ def run_pipeline_for_user(user_id: int):
 
         if max_workers == 1:
             for feed in feeds:
-                target = lang_dist.get(feed.get("language", "English"), apt)
-                articles_added += process_feed(feed, user_id, target)
+                articles_added += process_feed(feed, user_id, apt)
         else:
             print(f"  Processing {len(feeds)} feeds with {max_workers} workers")
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
-                        process_feed, feed, user_id,
-                        lang_dist.get(feed.get("language", "English"), apt)
+                        process_feed, feed, user_id, apt
                     )
                     for feed in feeds
                 ]
@@ -809,7 +799,7 @@ def run_pipeline_for_user(user_id: int):
                     except Exception as e:
                         print(f"  Worker failed: {e}")
 
-        # Enforce article count limits to clean up excess from parallel processing
+        # Enforce the user's topic-level cap to clean up any overshoot from parallel processing.
         enforce_article_limits(user_id, apt, lang_prefs)
         
         print(f"\n=== Pipeline complete for user {user_id}: {articles_added} new articles ===")
@@ -859,14 +849,12 @@ def run_pipeline_for_user_topic(user_id: int, topic: str):
 
         if max_workers == 1:
             for feed in feeds:
-                target = lang_dist.get(feed.get("language", "English"), apt)
-                articles_added += process_feed(feed, user_id, target)
+                articles_added += process_feed(feed, user_id, apt)
         else:
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = [
                     executor.submit(
-                        process_feed, feed, user_id,
-                        lang_dist.get(feed.get("language", "English"), apt)
+                        process_feed, feed, user_id, apt
                     )
                     for feed in feeds
                 ]
@@ -876,7 +864,7 @@ def run_pipeline_for_user_topic(user_id: int, topic: str):
                     except Exception as e:
                         print(f"  Worker failed: {e}")
 
-        # Enforce article count limits to clean up excess from parallel processing
+        # Enforce the user's topic-level cap to clean up any overshoot from parallel processing.
         enforce_article_limits(user_id, apt, lang_prefs)
 
         print(f"\n=== Topic pipeline complete: '{topic}' → {articles_added} new articles ===")

@@ -9,6 +9,7 @@ import Subscribe from './pages/Subscribe';
 import DiscoverFeeds from './pages/DiscoverFeeds';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Landing from './pages/Landing';
 
 function AppContent() {
   const [selectedTopic, setSelectedTopic] = useState(null);
@@ -33,13 +34,13 @@ function AppContent() {
 
   return (
     <Routes>
-      <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/register" element={token ? <Navigate to="/" replace /> : <Register />} />
-      <Route path="/" element={
+      <Route path="/" element={token ? (
         <ProtectedRoute>
           <AppLayout><Dashboard selectedTopic={selectedTopic} /></AppLayout>
         </ProtectedRoute>
-      } />
+      ) : <Landing />} />
+      <Route path="/login" element={token ? <Navigate to="/" replace /> : <Login />} />
+      <Route path="/register" element={token ? <Navigate to="/" replace /> : <Register />} />
       <Route path="/settings" element={
         <ProtectedRoute>
           <AppLayout><Subscribe /></AppLayout>

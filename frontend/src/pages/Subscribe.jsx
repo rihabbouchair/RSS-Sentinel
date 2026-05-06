@@ -322,7 +322,7 @@ export default function Subscribe() {
                 style={inputStyle}
               />
               <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px', fontFamily: 'JetBrains Mono, monospace' }}>
-                Controls how many articles are analyzed per topic with language distribution (English priority)
+                Controls how many articles are analyzed per topic
               </div>
             </div>
 

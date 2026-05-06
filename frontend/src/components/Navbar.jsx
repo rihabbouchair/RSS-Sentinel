@@ -41,7 +41,7 @@ export default function Navbar() {
           {location.pathname === '/' ? 'Dashboard' : location.pathname === '/discover' ? 'Discover Feeds' : 'Settings'}
         </div>
         <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace', lineHeight: '14px' }}>
-          {location.pathname === '/' ? 'Real-time news sentiment analysis' : location.pathname === '/discover' ? 'Browse & subscribe to new feeds' : 'Manage your preferences & feeds'}
+          {location.pathname === '/' ? '' : location.pathname === '/discover' ? 'Browse & subscribe to new feeds' : 'Manage your preferences & feeds'}
         </div>
       </div>
 

@@ -32,7 +32,7 @@ class LoginRequest(BaseModel):
 def serialize_user(user_row):
     topics = json.loads(user_row["topics"]) if user_row["topics"] else []
     
-    # Handle language_preferences safely - might be NULL in database
+    # Handle language_preferences safely
     lang_prefs = None
     try:
         lang_prefs = user_row["language_preferences"]

@@ -117,7 +117,7 @@ def init_db():
     except Exception:
         pass
 
-    # Add missing columns for existing databases first
+    # Add missing columns for existing databases
     columns_to_add = [
         ("pending_email", "TEXT"),
         ("email_verified", "INTEGER DEFAULT 0"),

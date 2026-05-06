@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NewsPulse — AI-Powered News Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #050c14;
+      --surface: rgba(10,18,32,0.75);
+      --border: rgba(255,255,255,0.07);
+      --border-glow: rgba(124,111,255,0.3);
+      --text: #edf2fc;
+      --muted: #64748b;
+      --subtle: #94a3b8;
+      --accent: #7c6fff;
+      --accent2: #00e5b0;
+      --negative: #ff5572;
+      --positive: #00e5b0;
+      --neutral: #7a8fa8;
+      --font-display: 'Inter', sans-serif;
+      --font-body: 'DM Sans', sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-body);
+      background-color: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── NOISE OVERLAY ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0.4;
+    }
+
+    /* ─── AMBIENT ORBS ─── */
+    .orbs {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 0;
+    }
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(100px);
+      opacity: 0.15;
+      animation: drift 20s ease-in-out infinite;
+    }
+    .orb-1 { width: 600px; height: 600px; background: var(--accent); top: -200px; left: -100px; animation-delay: 0s; }
+    .orb-2 { width: 500px; height: 500px; background: var(--accent2); top: 10%; right: -150px; animation-delay: -7s; }
+    .orb-3 { width: 400px; height: 400px; background: var(--negative); bottom: 20%; left: 30%; animation-delay: -14s; }
+
+    @keyframes drift {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -20px) scale(1.05); }
+      66% { transform: translate(-20px, 30px) scale(0.95); }
+    }
+
+    /* ─── NAV ─── */
+    nav {
+      position: fixed;
+      top: 0;
+      width: 100%;
+      z-index: 100;
+      padding: 20px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid transparent;
+      transition: all 0.4s;
+    }
+    nav.scrolled {
+      background: rgba(5, 12, 20, 0.85);
+      backdrop-filter: blur(24px);
+      border-bottom-color: var(--border);
+    }
+    .nav-logo {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.3rem;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-mark {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 36px;
+      list-style: none;
+    }
+    .nav-links a {
+      color: var(--subtle);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 400;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .nav-cta {
+      background: var(--accent);
+      color: white;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.2s;
+      font-family: var(--font-body);
+    }
+    .nav-cta:hover { background: #9289ff; transform: translateY(-1px); }
+
+    /* ─── HERO ─── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 120px 24px 80px;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(124,111,255,0.1);
+      border: 1px solid rgba(124,111,255,0.25);
+      border-radius: 100px;
+      padding: 6px 16px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      letter-spacing: 0.04em;
+      margin-bottom: 32px;
+      opacity: 0;
+      animation: fadeUp 0.8s 0.1s ease forwards;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent2);
+      animation: pulse-dot 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.6); }
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-size: clamp(2.8rem, 7vw, 6rem);
+      font-weight: 800;
+      line-height: 1.02;
+      letter-spacing: -0.04em;
+      max-width: 900px;
+      margin-bottom: 28px;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.2s ease forwards;
+    }
+    h1 .gradient-text {
+      background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 60%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-sub {
+      font-size: 1.1rem;
+      color: var(--subtle);
+      max-width: 560px;
+      line-height: 1.7;
+      font-weight: 300;
+      margin-bottom: 44px;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.35s ease forwards;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      opacity: 0;
+      animation: fadeUp 0.9s 0.5s ease forwards;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #9b8fff);
+      color: white;
+      padding: 14px 32px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 500;
+      text-decoration: none;
+      transition: all 0.25s;
+      box-shadow: 0 8px 32px rgba(124,111,255,0.35);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(124,111,255,0.5); }
+    .btn-secondary {
+      color: var(--subtle);
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 400;
+      text-decoration: none;
+      border: 1px solid var(--border);
+      transition: all 0.25s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-secondary:hover { border-color: rgba(255,255,255,0.18); color: var(--text); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── DASHBOARD PREVIEW ─── */
+    .preview-wrap {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 60px auto 0;
+      padding: 0 24px;
+      opacity: 0;
+      animation: fadeUp 1s 0.7s ease forwards;
+    }
+    .preview-glow {
+      position: absolute;
+      bottom: -60px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80%;
+      height: 200px;
+      background: radial-gradient(ellipse, rgba(124,111,255,0.25), transparent 70%);
+      pointer-events: none;
+    }
+    .preview-frame {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      overflow: hidden;
+      backdrop-filter: blur(24px);
+      box-shadow: 0 40px 120px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .preview-bar {
+      background: rgba(7,12,22,0.9);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .dots { display: flex; gap: 6px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; }
+    .dot-y { background: #febc2e; }
+    .dot-g { background: #28c840; }
+    .url-bar {
+      flex: 1;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    /* ─── MOCK DASHBOARD INSIDE FRAME ─── */
+    .mock-dash {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      min-height: 440px;
+    }
+    .mock-sidebar {
+      background: rgba(6,10,20,0.9);
+      border-right: 1px solid var(--border);
+      padding: 20px 14px;
+    }
+    .mock-sidebar-logo {
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 24px;
+      padding: 0 6px;
+    }
+    .mock-nav-item {
+      padding: 8px 12px;
+      border-radius: 7px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 3px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mock-nav-item.active {
+      background: rgba(124,111,255,0.1);
+      color: var(--accent);
+    }
+    .mock-tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      margin: 3px;
+    }
+    .tag-pos { background: rgba(0,229,176,0.12); color: var(--positive); }
+    .tag-neg { background: rgba(255,85,114,0.12); color: var(--negative); }
+    .tag-neu { background: rgba(122,143,168,0.12); color: var(--neutral); }
+
+    .mock-main { padding: 20px; overflow: hidden; }
+    .mock-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .mock-title {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    .mock-pills { display: flex; gap: 6px; }
+    .mock-pill {
+      padding: 4px 10px;
+      border-radius: 100px;
+      font-size: 0.65rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .mock-pill.active { background: rgba(124,111,255,0.15); border-color: rgba(124,111,255,0.3); color: var(--accent); }
+
+    .mock-cards { display: grid; gap: 10px; }
+    .mock-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .mock-card-body { flex: 1; min-width: 0; }
+    .mock-card-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      margin-bottom: 6px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mock-card-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      font-family: var(--font-mono);
+    }
+    .mock-score-bar {
+      width: 40px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    .score-ring {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 500;
+      border: 2px solid;
+    }
+    .ring-pos { border-color: var(--positive); color: var(--positive); }
+    .ring-neg { border-color: var(--negative); color: var(--negative); }
+    .ring-neu { border-color: var(--neutral); color: var(--neutral); }
+
+    /* ─── STATS STRIP ─── */
+    .stats-strip {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      margin: 100px 0;
+      padding: 40px 0;
+      overflow: hidden;
+    }
+    .stats-strip::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(124,111,255,0.03);
+    }
+    .stats-inner {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+    }
+    .stat-item {
+      text-align: center;
+      padding: 20px;
+      border-right: 1px solid var(--border);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-num {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--text), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    /* ─── FEATURES ─── */
+    .section {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 24px;
+    }
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 14px;
+    }
+    .section-title {
+      font-family: var(--font-display);
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      max-width: 600px;
+      margin-bottom: 60px;
+    }
+    .section-title span { color: var(--accent); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      transition: all 0.3s;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(124,111,255,0.06), transparent 60%);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover { border-color: rgba(124,111,255,0.25); transform: translateY(-3px); }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      margin-bottom: 18px;
+    }
+    .icon-purple { background: rgba(124,111,255,0.15); }
+    .icon-green  { background: rgba(0,229,176,0.12); }
+    .icon-red    { background: rgba(255,85,114,0.12); }
+    .icon-blue   { background: rgba(56,189,248,0.12); }
+    .icon-yellow { background: rgba(251,191,36,0.12); }
+    .icon-teal   { background: rgba(45,212,191,0.12); }
+
+    .feature-title {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+      letter-spacing: -0.01em;
+    }
+    .feature-desc {
+      font-size: 0.875rem;
+      color: var(--subtle);
+      line-height: 1.7;
+      font-weight: 300;
+    }
+
+    /* ─── PIPELINE SECTION ─── */
+    .pipeline-section {
+      position: relative;
+      z-index: 1;
+      padding: 80px 24px;
+      overflow: hidden;
+    }
+    .pipeline-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .pipeline-steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 2px;
+      margin-top: 60px;
+      position: relative;
+    }
+    .pipeline-steps::before {
+      content: '';
+      position: absolute;
+      top: 28px;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent), var(--accent2), transparent);
+      z-index: 0;
+    }
+    .pipeline-step {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 0 16px;
+    }
+    .step-num {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-mono);
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin: 0 auto 20px;
+      color: var(--accent);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 0 4px rgba(5,12,20,1);
+    }
+    .step-title {
+      font-family: var(--font-display);
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .step-desc {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    /* ─── TECH STACK ─── */
+    .tech-section {
+      position: relative;
+      z-index: 1;
+      padding: 80px 24px;
+      background: rgba(10,18,32,0.5);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .tech-inner { max-width: 1100px; margin: 0 auto; }
+    .tech-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 16px;
+      margin-top: 48px;
+    }
+    .tech-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 12px;
+      text-align: center;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--subtle);
+      transition: all 0.25s;
+      backdrop-filter: blur(12px);
+    }
+    .tech-pill:hover { border-color: rgba(124,111,255,0.3); color: var(--text); transform: translateY(-2px); }
+    .tech-pill .tech-icon { font-size: 1.4rem; display: block; margin-bottom: 8px; }
+
+    /* ─── SENTIMENT DEMO ─── */
+    .sentiment-section {
+      position: relative;
+      z-index: 1;
+      padding: 100px 24px;
+    }
+    .sentiment-inner { max-width: 1100px; margin: 0 auto; }
+    .sentiment-demo {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+      align-items: center;
+      margin-top: 60px;
+    }
+    .sentiment-visual {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      backdrop-filter: blur(20px);
+    }
+    .sentiment-bars { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+    .sentiment-bar-item { }
+    .sbar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      margin-bottom: 6px;
+    }
+    .sbar-track {
+      height: 6px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .sbar-fill {
+      height: 100%;
+      border-radius: 100px;
+      animation: growBar 1.5s ease forwards;
+      transform-origin: left;
+    }
+    @keyframes growBar {
+      from { transform: scaleX(0); }
+      to { transform: scaleX(1); }
+    }
+    .fill-pos { background: linear-gradient(90deg, var(--positive), rgba(0,229,176,0.4)); width: 62%; }
+    .fill-neu { background: linear-gradient(90deg, var(--neutral), rgba(122,143,168,0.4)); width: 28%; }
+    .fill-neg { background: linear-gradient(90deg, var(--negative), rgba(255,85,114,0.4)); width: 10%; }
+
+    .sentiment-articles { display: flex; flex-direction: column; gap: 14px; }
+    .sent-article {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      transition: border-color 0.2s;
+    }
+    .sent-article:hover { border-color: rgba(255,255,255,0.14); }
+    .sent-badge {
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .badge-pos { background: rgba(0,229,176,0.12); color: var(--positive); border: 1px solid rgba(0,229,176,0.2); }
+    .badge-neg { background: rgba(255,85,114,0.12); color: var(--negative); border: 1px solid rgba(255,85,114,0.2); }
+    .badge-neu { background: rgba(122,143,168,0.12); color: var(--neutral); border: 1px solid rgba(122,143,168,0.2); }
+    .sent-text { font-size: 0.82rem; color: var(--subtle); line-height: 1.4; }
+
+    /* ─── PRIVACY SECTION ─── */
+    .privacy-section {
+      position: relative;
+      z-index: 1;
+      padding: 80px 24px;
+    }
+    .privacy-card {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 60px;
+      backdrop-filter: blur(20px);
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .privacy-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 60%;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--accent2), transparent);
+    }
+    .privacy-icon {
+      font-size: 3rem;
+      margin-bottom: 20px;
+    }
+    .privacy-card h3 {
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      margin-bottom: 16px;
+    }
+    .privacy-card p {
+      color: var(--subtle);
+      font-size: 1rem;
+      line-height: 1.7;
+      max-width: 500px;
+      margin: 0 auto 32px;
+      font-weight: 300;
+    }
+    .privacy-pillars {
+      display: flex;
+      gap: 24px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+    .pillar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: var(--accent2);
+      font-family: var(--font-mono);
+    }
+
+    /* ─── CTA FINAL ─── */
+    .cta-section {
+      position: relative;
+      z-index: 1;
+      padding: 100px 24px;
+      text-align: center;
+    }
+    .cta-inner { max-width: 700px; margin: 0 auto; }
+    .cta-inner h2 {
+      font-family: var(--font-display);
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 20px;
+    }
+    .cta-inner p {
+      color: var(--subtle);
+      font-size: 1rem;
+      margin-bottom: 40px;
+      font-weight: 300;
+    }
+    .install-block {
+      background: rgba(10,18,32,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--accent2);
+      max-width: 480px;
+      margin: 0 auto 32px;
+      text-align: left;
+      line-height: 1.8;
+    }
+    .install-comment { color: var(--muted); }
+    .install-cmd { color: var(--text); }
+
+    /* ─── FOOTER ─── */
+    footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border);
+      padding: 40px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+    .footer-logo {
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { color: var(--muted); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--text); }
+
+    /* ─── SCROLL ANIMATIONS ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 768px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      .features-grid { grid-template-columns: 1fr; }
+      .stats-inner { grid-template-columns: repeat(2, 1fr); }
+      .stat-item { border-bottom: 1px solid var(--border); border-right: none; }
+      .stat-item:nth-child(odd) { border-right: 1px solid var(--border); }
+      .pipeline-steps { grid-template-columns: repeat(2, 1fr); }
+      .tech-grid { grid-template-columns: repeat(3, 1fr); }
+      .sentiment-demo { grid-template-columns: 1fr; }
+      .privacy-card { padding: 36px 24px; }
+      .mock-dash { grid-template-columns: 1fr; }
+      .mock-sidebar { display: none; }
+      footer { flex-direction: column; gap: 16px; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient background -->
+  <div class="orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Navigation -->
+  <nav id="navbar">
+    <div class="nav-logo">
+      <div class="logo-mark">📡</div>
+      NewsPulse
+    </div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#pipeline">How it works</a></li>
+      <li><a href="#tech">Tech stack</a></li>
+      <li><a href="#privacy">Privacy</a></li>
+    </ul>
+    <a href="#install" class="nav-cta">Get started →</a>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Powered by Ollama · Qwen 2.5:3b · Local AI
+    </div>
+    <h1>
+      Your news,<br/>
+      <span class="gradient-text">intelligently filtered</span>
+    </h1>
+    <p class="hero-sub">
+      NewsPulse aggregates RSS feeds from across the globe, runs private AI-powered sentiment analysis, and surfaces the stories that matter — all on your machine.
+    </p>
+    <div class="hero-actions">
+      <a href="/login" class="btn-primary">
+        ↓ &nbsp;Get started free
+      </a>
+      <a href="https://github.com/rihabbouchair/RSS-Sentinel.git" class="btn-secondary" target="_blank">
+        ⭐ &nbsp;View on GitHub
+      </a>
+    </div>
+
+    <!-- Dashboard preview -->
+    <div class="preview-wrap">
+      <div class="preview-glow"></div>
+      <div class="preview-frame">
+        <div class="preview-bar">
+          <div class="dots">
+            <div class="dot dot-r"></div>
+            <div class="dot dot-y"></div>
+            <div class="dot dot-g"></div>
+          </div>
+          <div class="url-bar">localhost:5173 — NewsPulse Dashboard</div>
+        </div>
+        <div class="mock-dash">
+          <div class="mock-sidebar">
+            <div class="mock-sidebar-logo">📡 NewsPulse</div>
+            <div class="mock-nav-item active">📰 &nbsp;Dashboard</div>
+            <div class="mock-nav-item">🔍 &nbsp;Discover</div>
+            <div class="mock-nav-item">⚙️ &nbsp;Settings</div>
+            <div style="margin-top: 20px; padding: 0 6px;">
+              <div style="font-size: 0.65rem; color: var(--muted); margin-bottom: 8px; font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em;">Topics</div>
+              <span class="mock-tag tag-pos">AI</span>
+              <span class="mock-tag tag-neu">Tech</span>
+              <span class="mock-tag tag-neu">Economy</span>
+              <span class="mock-tag tag-neg">Politics</span>
+              <span class="mock-tag tag-pos">Science</span>
+              <span class="mock-tag tag-neu">Space</span>
+              <span class="mock-tag tag-pos">Health</span>
+            </div>
+          </div>
+          <div class="mock-main">
+            <div class="mock-header">
+              <div class="mock-title">Today's Briefing</div>
+              <div class="mock-pills">
+                <div class="mock-pill active">All</div>
+                <div class="mock-pill">Positive</div>
+                <div class="mock-pill">Negative</div>
+              </div>
+            </div>
+            <div class="mock-cards">
+              <div class="mock-card">
+                <div class="mock-score-bar">
+                  <div class="score-ring ring-pos">+87</div>
+                </div>
+                <div class="mock-card-body">
+                  <div class="mock-card-title">OpenAI announces breakthrough in reasoning models with GPT-5 architecture</div>
+                  <div class="mock-card-meta"><span>AI</span> · <span>2 min ago</span> · <span>techcrunch.com</span></div>
+                </div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-score-bar">
+                  <div class="score-ring ring-neg">−64</div>
+                </div>
+                <div class="mock-card-body">
+                  <div class="mock-card-title">Global markets tumble as inflation data exceeds analyst forecasts</div>
+                  <div class="mock-card-meta"><span>Economy</span> · <span>14 min ago</span> · <span>reuters.com</span></div>
+                </div>
+              </div>
+              <div class="mock-card">
+                <div class="mock-score-bar">
+                  <div class="score-ring ring-neu">≈12</div>
+                </div>
+                <div class="mock-card-body">
+                  <div class="mock-card-title">ESA confirms next Mars mission launch date in 2027 window</div>
+                  <div class="mock-card-meta"><span>Space</span> · <span>1 hr ago</span> · <span>esa.int</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATS STRIP -->
+  <div class="stats-strip reveal">
+    <div class="stats-inner">
+      <div class="stat-item">
+        <div class="stat-num">50+</div>
+        <div class="stat-label">Canonical topics tracked</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">0¢</div>
+        <div class="stat-label">API cost — runs fully local</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">3</div>
+        <div class="stat-label">Sentiment dimensions</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num">∞</div>
+        <div class="stat-label">RSS feeds you can add</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEATURES -->
+  <section class="section" id="features">
+    <div class="reveal">
+      <div class="section-label">// core features</div>
+      <h2 class="section-title">Everything you need to <span>read smarter</span></h2>
+    </div>
+    <div class="features-grid reveal">
+      <div class="feature-card">
+        <div class="feature-icon icon-purple">📡</div>
+        <div class="feature-title">RSS Aggregation</div>
+        <div class="feature-desc">Pull the latest headlines from any RSS source automatically. FeedParser handles dozens of formats so you can focus on reading, not configuring.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon icon-green">🧠</div>
+        <div class="feature-title">Local AI Analysis</div>
+        <div class="feature-desc">Ollama + Qwen 2.5:3b runs fully on your machine. Zero API calls, zero subscription fees, zero data leaving your device.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon icon-red">📊</div>
+        <div class="feature-title">Sentiment Scoring</div>
+        <div class="feature-desc">Every article receives a Positive, Neutral, or Negative score. Filter your feed by emotional register and track global mood trends.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon icon-blue">⚡</div>
+        <div class="feature-title">Real-time Dashboard</div>
+        <div class="feature-desc">A sleek React + Tailwind interface that updates live. Topics sidebar, sentiment filters, and AI-generated daily summaries built in.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon icon-yellow">📧</div>
+        <div class="feature-title">Email Digests</div>
+        <div class="feature-desc">Subscribe to curated topic digests delivered to your inbox. Configure frequency and preferred topics in the settings panel.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon icon-teal">🔒</div>
+        <div class="feature-title">Privacy-First</div>
+        <div class="feature-desc">All processing happens locally. SQLite stores your data on disk. No external inference, no cloud lock-in</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section class="pipeline-section" id="pipeline">
+    <div class="pipeline-inner">
+      <div class="reveal">
+        <div class="section-label">// how it works</div>
+        <h2 class="section-title">Four steps from <span style="color:var(--accent2)">feed to insight</span></h2>
+      </div>
+      <div class="pipeline-steps reveal">
+        <div class="pipeline-step">
+          <div class="step-num">01</div>
+          <div class="step-title">Fetch</div>
+          <div class="step-desc">FeedParser polls your RSS sources on a configurable schedule, pulling fresh articles as they're published.</div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-num">02</div>
+          <div class="step-title">Filter</div>
+          <div class="step-desc">A keyword pre-filter and topic classifier routes each article to one of 50+ topics .</div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-num">03</div>
+          <div class="step-title">Analyze</div>
+          <div class="step-desc">Ollama runs Qwen 2.5:3b locally to score sentiment, extract key themes, and generate a concise summary per article.</div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-num">04</div>
+          <div class="step-title">Visualize</div>
+          <div class="step-desc">Results are stored in SQLite and surfaced instantly in the React dashboard with filters, charts, and daily briefings.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SENTIMENT DEMO -->
+  <section class="sentiment-section">
+    <div class="sentiment-inner">
+      <div class="reveal">
+        <div class="section-label">// sentiment engine</div>
+        <h2 class="section-title">Understand the <span>emotional pulse</span> of the news</h2>
+      </div>
+      <div class="sentiment-demo reveal">
+        <div class="sentiment-visual">
+          <div style="font-family:var(--font-display);font-weight:700;margin-bottom:4px;">Today's Sentiment Distribution</div>
+          <div style="font-size:0.75rem;color:var(--muted);font-family:var(--font-mono);margin-bottom:20px;">Based on 142 articles analyzed</div>
+          <div class="sentiment-bars">
+            <div class="sentiment-bar-item">
+              <div class="sbar-label">
+                <span style="color:var(--positive)">● Positive</span>
+                <span style="color:var(--muted);font-size:0.7rem;">62%</span>
+              </div>
+              <div class="sbar-track"><div class="sbar-fill fill-pos"></div></div>
+            </div>
+            <div class="sentiment-bar-item">
+              <div class="sbar-label">
+                <span style="color:var(--neutral)">● Neutral</span>
+                <span style="color:var(--muted);font-size:0.7rem;">28%</span>
+              </div>
+              <div class="sbar-track"><div class="sbar-fill fill-neu"></div></div>
+            </div>
+            <div class="sentiment-bar-item">
+              <div class="sbar-label">
+                <span style="color:var(--negative)">● Negative</span>
+                <span style="color:var(--muted);font-size:0.7rem;">10%</span>
+              </div>
+              <div class="sbar-track"><div class="sbar-fill fill-neg"></div></div>
+            </div>
+          </div>
+          <div style="margin-top:28px;padding-top:20px;border-top:1px solid var(--border);font-size:0.75rem;color:var(--muted);line-height:1.6;">
+            <strong style="color:var(--text)">Daily summary:</strong> Today's top stories lean optimistic, driven by breakthroughs in AI research and clean energy. Market uncertainty introduces a cautious note in the Economy cluster.
+          </div>
+        </div>
+        <div class="sentiment-articles">
+          <div class="sent-article">
+            <span class="sent-badge badge-pos">POSITIVE</span>
+            <span class="sent-text">Scientists achieve record efficiency in perovskite solar cells, opening path to cheaper clean energy</span>
+          </div>
+          <div class="sent-article">
+            <span class="sent-badge badge-neg">NEGATIVE</span>
+            <span class="sent-text">Tensions escalate at border as diplomatic talks stall for third consecutive week</span>
+          </div>
+          <div class="sent-article">
+            <span class="sent-badge badge-neu">NEUTRAL</span>
+            <span class="sent-text">Central bank holds rates steady, signals data-dependent approach through Q3</span>
+          </div>
+          <div class="sent-article">
+            <span class="sent-badge badge-pos">POSITIVE</span>
+            <span class="sent-text">New study links Mediterranean diet to 30% lower risk of cognitive decline in adults over 60</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TECH STACK -->
+  <section class="tech-section" id="tech">
+    <div class="tech-inner">
+      <div class="reveal">
+        <div class="section-label">// tech stack</div>
+        <h2 class="section-title" style="margin-bottom: 0;">Built on solid foundations</h2>
+      </div>
+      <div class="tech-grid reveal">
+        <div class="tech-pill"><span class="tech-icon">⚛️</span>React.js</div>
+        <div class="tech-pill"><span class="tech-icon">🌬️</span>Tailwind CSS</div>
+        <div class="tech-pill"><span class="tech-icon">🐍</span>FastAPI</div>
+        <div class="tech-pill"><span class="tech-icon">🦙</span>Ollama</div>
+        <div class="tech-pill"><span class="tech-icon">💬</span>Qwen 2.5:3b</div>
+        <div class="tech-pill"><span class="tech-icon">🗄️</span>SQLite</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRIVACY -->
+  <section class="privacy-section" id="privacy">
+    <div class="privacy-card reveal">
+      <div class="privacy-icon">🔐</div>
+      <h3>Your data stays yours. Always.</h3>
+      <p>NewsPulse was built with privacy as a first principle, not an afterthought. The local LLM processes every article on your hardware — nothing is ever sent to an external API.</p>
+      <div class="privacy-pillars">
+        <div class="pillar">✓ &nbsp;Local LLM inference</div>
+        <div class="pillar">✓ &nbsp;SQLite on-disk storage</div>
+        <div class="pillar">✓ &nbsp;No cloud required</div>
+        <div class="pillar">✓ &nbsp;Open source</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FINAL CTA / INSTALL -->
+  <section class="cta-section" id="install">
+    <div class="cta-inner reveal">
+      <h2>Start reading smarter</h2>
+      <p>Clone the repo, install dependencies, and launch NewsPulse locally. No cloud setup, no API keys.</p>
+      <div class="install-block">
+        <span class="install-comment"># 1. Pull the model</span><br/>
+        <span class="install-cmd">ollama run qwen2.5:3b:</span><br/><br/>
+        <span class="install-comment"># 2. Start the backend</span><br/>
+        <span class="install-cmd">cd backend && pip install -r requirements.txt</span><br/>
+        <span class="install-cmd">uvicorn main:app --reload</span><br/><br/>
+        <span class="install-comment"># 3. Start the frontend</span><br/>
+        <span class="install-cmd">cd frontend && npm install && npm run dev</span>
+      </div>
+      <div class="hero-actions">
+        <a href="https://github.com/your-repo/rss_sentiment_topic_analyzer" class="btn-primary" target="_blank">⭐ &nbsp;View on GitHub</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-logo">
+      <div class="logo-mark" style="width:26px;height:26px;font-size:12px;">📡</div>
+      NewsPulse
+    </div>
+    <div style="color:var(--muted);font-size:0.8rem;">
+      Built with FastAPI · React · Ollama · SQLite
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/your-repo/rss_sentiment_topic_analyzer" target="_blank">GitHub</a>
+      <a href="#features">Features</a>
+    </div>
+  </footer>
+
+  <script>
+    // Navbar scroll effect
+    const navbar = document.getElementById('navbar');
+    window.addEventListener('scroll', () => {
+      navbar.classList.toggle('scrolled', window.scrollY > 40);
+    });
+
+    // Scroll reveal
+    const reveals = document.querySelectorAll('.reveal');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    reveals.forEach(el => observer.observe(el));
+
+    // Stagger children inside reveal grids
+    document.querySelectorAll('.features-grid, .pipeline-steps, .tech-grid').forEach(grid => {
+      [...grid.children].forEach((child, i) => {
+        child.style.transitionDelay = `${i * 80}ms`;
+      });
+    });
+  </script>
+
+</body>
+</html>

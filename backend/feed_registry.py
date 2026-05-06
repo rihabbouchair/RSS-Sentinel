@@ -43,9 +43,9 @@ ECHOUROUK_ARABIC = {
     "Gaming":   "https://www.echorouk.dz/feed/",
 }
 
-# BBC Arabic - only topic-specific feeds that add value
+# BBC Arabic 
 BBC_ARABIC = {
-    # Sport-specific feed — genuinely relevant
+    # Sport-specific feed 
     "Sport":         "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
     "Football":      "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
     "Basketball":    "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
@@ -53,7 +53,7 @@ BBC_ARABIC = {
     "Formula 1":     "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
     "Fitness":       "https://feeds.bbci.co.uk/arabic/sport/rss.xml",
 
-    # Business-specific feed — genuinely relevant
+    # Business-specific feed 
     "Economy":       "https://feeds.bbci.co.uk/arabic/business/rss.xml",
     "Business":      "https://feeds.bbci.co.uk/arabic/business/rss.xml",
     "Finance":       "https://feeds.bbci.co.uk/arabic/business/rss.xml",
@@ -92,9 +92,6 @@ BBC_ARABIC = {
     "Protests":      "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
     "Natural Disasters": "https://feeds.bbci.co.uk/arabic/worldservice/rss.xml",
 
-    # NOT included (no relevant BBC Arabic feed):
-    # Entertainment, Cinema, Music, Fashion, Food, Travel, Culture,
-    # Agriculture, Law, Corruption, Crime
 }
 
 # Algerian Arabic sources (WordPress RSS)
@@ -105,8 +102,6 @@ ALGERIAN_ARABIC = {
     "World":    "https://www.ennaharonline.com/feed/",
 }
 
-# Additional Arabic sources (working RSS feeds)
-# These are only used for broad Arabic topics, not narrow subjects like AI or Crypto.
 ARABIC_NEWS_SOURCES = {
     "Politics": "https://feeds.alarabiya.net/newsfeed.xml",
     "Sport":    "https://feeds.alarabiya.net/newsfeed.xml",
